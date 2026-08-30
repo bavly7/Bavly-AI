@@ -88,17 +88,30 @@
 - [ ] Structured interview → pilot project #1 (KYC Onboarding System)
 - [ ] Structured interview → pilot project #2 (Agentic RAG Retail
       Assistant)
-- [ ] Certifications table finalized — 38 files inventoried and mapped
-      (see chat history for full mapping); 2 items need issuer
-      confirmation (CIB certificate context, "AI For Everyone" issuer)
+- [x] Certifications table finalized — 38 files inventoried and mapped to
+      title/issuer/field (see chat history for full mapping). "AI For
+      Everyone" confirmed via web search: Andrew Ng / DeepLearning.AI,
+      field = AI Fundamentals. ONE remaining open item: "Bavly Waleed
+      (CIB).pdf" — context/issuer still unknown, owner to confirm (cannot
+      fetch Google Drive links directly — no auth access).
+- [ ] Owner uploading all 38 cert files directly to Supabase Storage once
+      bucket exists; `file_url` mapping finalized against exact storage
+      paths at that point.
 - [ ] Supabase project created (new account) + pgvector enabled
-- [ ] Supabase Storage bucket set up for certification PDFs; owner
-      uploading files directly, `file_url` mapping to be finalized once
-      bucket path is known
+- [ ] Supabase Storage bucket set up for certification PDFs
 - [ ] Schema migrated, pilot data populated
 - [ ] (Phase 2 start) Structured interview → FlyRank/Social Media
       Publishing project narrative (distinct from the `experience/flyrank/`
       files, which cover the internship itself)
+- [ ] (Deferred, post-build) Structured interview → **Bavly AI itself**
+      as project #4 — the system's own build story (architecture,
+      challenges, decisions, learnings). Deliberately done LAST, after
+      the system is actually built, so answers reflect real lived
+      experience rather than a plan. Handled as a special-cased/routed
+      answer in the intent classifier rather than a normal retrieved
+      chunk, to avoid the self-referential "chatbot describing itself
+      via its own retrieval" complexity — same knowledge/projects/
+      folder structure, just flagged.
 
 ### Phase 1 — Core RAG (text-only, linear, no graph)
 - [ ] Embedding pipeline (chunk → embed → store)

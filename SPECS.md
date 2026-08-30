@@ -133,7 +133,27 @@ with `source_type = 'project_narrative'`.
   Animation logic is deterministic and decoupled from generation — the
   LLM never directly controls animation, only emits a tag.
 
-## 8. Tools (callable functions / LangGraph tools)
+## 8. Certification Display (Structured, not inline)
+
+When `get_certifications()` retrieval fires, the response object carries a
+separate structured field alongside the natural-language answer:
+
+```json
+{
+  "answer": "Yes — I have a Computer Vision Engineer certification from ITI Mahara Tech...",
+  "tone": "informative",
+  "certificate_links": [
+    {"title": "Computer Vision Engineer", "issuer": "ITI Mahara Tech", "url": "<supabase_storage_url>"}
+  ]
+}
+```
+
+Generation never embeds a raw URL in the prose text. The frontend renders
+`certificate_links` as clickable cards/chips below the chat message
+(same UI pattern as source citations). This keeps certificate PDFs
+genuinely retrievable by the recruiter, not just described.
+
+## 9. Tools (callable functions / LangGraph tools)
 
 - `search_project_kb(query, project_id?)`
 - `search_personal_kb(query)`
@@ -153,7 +173,7 @@ Implemented as plain Python functions / LangGraph tools first (single
 consumer = this app). MCP wrapper over retrieval tools is an optional
 Phase 7 capstone feature, not a functional requirement.
 
-## 9. Build Phases
+## 10. Build Phases
 
 0. Data foundation (schema + pilot project extraction)
 1. Core RAG, text-only, linear (no graph), 2 pilot projects, deployed
