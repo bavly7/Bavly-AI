@@ -23,23 +23,82 @@
   squash-at-the-end), e.g. `feat(phase1): linear RAG retrieval + generation
   working on pilot data`.
 
-## Open Decisions (need answers before relevant phase starts)
-- [X] Which 2 projects are the pilot projects for Phase 0/1?
-- [X] LLM provider (free/rate-limited) — GROQ.
-- [X] Embedding model (multilingual, free) — Cohere multilingual embeddings.
-- [X] STT/TTS provider, especially Egyptian Arabic quality — (en-US-GuyNeural, ar-EG-ShakirNeural)
-      evaluated.
-- [X] Frontend + backend hosting providers — Vercel (frontend) + Render (backend).
+## Open Decisions — RESOLVED
+- [x] Repo name: `bavly`
+- [x] Supabase: separate email/account dedicated to this project.
+- [x] Projects in scope (3 total): `flyrank-capstone-social-studio`,
+      `Automated-KYC-Onboarding-System-Egyptian-National-ID`,
+      `Agentic-RAG-Retail-Assistant`. Pilot pair for Phase 0/1: KYC +
+      Agentic RAG (richer architecture/trade-off stories). FlyRank added
+      right after as the first scale-up project (Phase 2 start), not part
+      of the original pilot validation.
+- [x] LLM provider: Groq, model `openai/gpt-oss-120b`, key in `.env` as
+      `GROQ_API_KEY`. OpenAI-compatible endpoint. NOTE: free tier is rate
+      limited (~30 req/min, ~200K tokens/day as of research date) — design
+      for graceful degradation (friendly rate-limit message), not silent
+      failure, if the demo gets a traffic spike.
+- [x] Embedding model: `CohereLabs/Cohere-embed-multilingual-v3.0`
+      (candidate — confirm actual free access path, e.g. via Cohere API
+      free tier or HF Inference, before Phase 0 implementation).
+- [x] STT: Groq Whisper-large-v3 API.
+- [x] TTS: `en-US-GuyNeural` (English), `ar-EG-ShakirNeural` (Egyptian
+      Arabic) — Edge TTS voices. Confirm library/access path (e.g.
+      `edge-tts` Python package) at Phase 5 implementation time.
+- [x] Frontend hosting: Vercel.
+- [x] Backend hosting: Render.
+
+## Notes on Resolved Decisions
+- Groq, Cohere, Edge TTS specifics (exact free-tier limits, access
+  methods) should be re-verified live at the point of implementation for
+  each phase — terms shift, and locking the *choice* now doesn't mean
+  skipping a final check before writing the integration code.
 
 ## Phase Checklist
 
 ### Phase 0 — Data foundation
-- [ ] Finalize schema (already drafted in SPECS.md §3)
-- [ ] Structured interview → pilot project #1
-- [ ] Structured interview → pilot project #2
-- [ ] Extract certifications + personal bio data
+- [x] `knowledge/` folder structure established: `personal/`,
+      `experience/{elevvo,nti,depi,flyrank,tips-hindawy,dhub-ai-agents}/`,
+      `certifications/`, `projects/{kyc-onboarding,agentic-rag-retail,
+      social-media-publishing}/` — each with per-topic .md files mapping
+      to `knowledge_chunks` source_type + tags at ingestion time.
+- [x] `personal/` complete: bio.md, education.md, skills.md, goals.md
+- [~] `experience/` — 6 of 7 folders created (7th, D-Hub RPA Automation,
+      held back until it actually starts — see note below).
+      - [x] elevvo — complete (overview, responsibilities, achievements,
+            learnings all filled)
+      - [x] nti — complete (overview, responsibilities, achievements,
+            learnings all filled)
+      - [x] depi — complete (overview, responsibilities, achievements,
+            learnings all filled)
+      - [x] flyrank — complete (overview, responsibilities incl. scoped
+            blockchain-intro note, achievements, learnings all filled)
+      - [~] tips-hindawy — overview.md complete (IN PROGRESS, started
+            8/29/2026, no end date yet); responsibilities.md still
+            placeholder (fill once further along); no
+            achievements.md/learnings.md yet (premature while in
+            progress)
+      - [~] dhub-ai-agents — overview.md complete (IN PROGRESS, started
+            8/26/2026, no end date yet); responsibilities.md still
+            placeholder; no achievements/learnings yet
+      - [ ] dhub-rpa-automation — NOT YET CREATED. Starts next week per
+            owner. Add once it actually begins.
+- [ ] Finalize schema (already drafted in SPECS.md §3) — needs
+      `experience` source_type added, and `file_url` column added to
+      `certifications` table (see SPECS.md update needed)
+- [ ] Structured interview → pilot project #1 (KYC Onboarding System)
+- [ ] Structured interview → pilot project #2 (Agentic RAG Retail
+      Assistant)
+- [ ] Certifications table finalized — 38 files inventoried and mapped
+      (see chat history for full mapping); 2 items need issuer
+      confirmation (CIB certificate context, "AI For Everyone" issuer)
 - [ ] Supabase project created (new account) + pgvector enabled
+- [ ] Supabase Storage bucket set up for certification PDFs; owner
+      uploading files directly, `file_url` mapping to be finalized once
+      bucket path is known
 - [ ] Schema migrated, pilot data populated
+- [ ] (Phase 2 start) Structured interview → FlyRank/Social Media
+      Publishing project narrative (distinct from the `experience/flyrank/`
+      files, which cover the internship itself)
 
 ### Phase 1 — Core RAG (text-only, linear, no graph)
 - [ ] Embedding pipeline (chunk → embed → store)

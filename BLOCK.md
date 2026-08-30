@@ -16,4 +16,10 @@
 > - Status: investigating / needs owner input / blocked on external service
 > ```
 
-(No active blockers.)
+## [2026-08-30] Certification mapping — 2 unresolved entries
+- What was attempted: mapping the 38 certification filenames to
+  title/issuer/field
+- What happened: "Bavly Waleed (CIB).pdf" — unclear what this certificate
+  is for (issuer/context unknown). "AI For everyone.pdf" — issuer not
+  confirmed (likely Coursera/DeepLearning.AI but unverified).
+- Status: needs owner input
