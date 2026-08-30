@@ -1,12 +1,12 @@
 # TASKS.md — Progress Tracker
- 
+
 > Tracks phase status, what's done, what's pending, and open decisions.
 > Update at the end of every work session. This file persists — unlike
 > BLOCK.md, entries here are not deleted when resolved, just marked done.
- 
+
 ## Current Phase
 **Phase 0 — Data foundation** (not yet started)
- 
+
 ## Decided So Far
 - Stack: Python backend, FastAPI, PostgreSQL + pgvector (Supabase, separate
   email/account), React frontend, LangGraph added in Phase 2.
@@ -22,15 +22,17 @@
   root. Real, descriptive commit messages per meaningful change (not
   squash-at-the-end), e.g. `feat(phase1): linear RAG retrieval + generation
   working on pilot data`.
+
 ## Open Decisions (need answers before relevant phase starts)
-- [ ] Which 2 projects are the pilot projects for Phase 0/1?
-- [ ] LLM provider (free/rate-limited) — not yet chosen.
-- [ ] Embedding model (multilingual, free) — not yet chosen.
-- [ ] STT/TTS provider, especially Egyptian Arabic quality — not yet
+- [X] Which 2 projects are the pilot projects for Phase 0/1?
+- [X] LLM provider (free/rate-limited) — GROQ.
+- [X] Embedding model (multilingual, free) — Cohere multilingual embeddings.
+- [X] STT/TTS provider, especially Egyptian Arabic quality — (en-US-GuyNeural, ar-EG-ShakirNeural)
       evaluated.
-- [ ] Frontend + backend hosting providers — not yet chosen.
+- [X] Frontend + backend hosting providers — Vercel (frontend) + Render (backend).
+
 ## Phase Checklist
- 
+
 ### Phase 0 — Data foundation
 - [ ] Finalize schema (already drafted in SPECS.md §3)
 - [ ] Structured interview → pilot project #1
@@ -38,6 +40,7 @@
 - [ ] Extract certifications + personal bio data
 - [ ] Supabase project created (new account) + pgvector enabled
 - [ ] Schema migrated, pilot data populated
+
 ### Phase 1 — Core RAG (text-only, linear, no graph)
 - [ ] Embedding pipeline (chunk → embed → store)
 - [ ] Retrieval function (vector search + structured lookup)
@@ -45,29 +48,36 @@
 - [ ] Validate against pilot data (no hallucination, refusal works)
 - [ ] FastAPI endpoint wrapping retrieval + generation
 - [ ] Minimal frontend chat UI, deployed publicly
+
 ### Phase 2 — Scale data + LangGraph
 - [ ] Remaining project interviews + bulk ingest
 - [ ] Port linear RAG into LangGraph (intent routing, confidence gating)
 - [ ] Conversation history/state (LangGraph checkpointer)
 - [ ] Caching node
+
 ### Phase 3 — GitHub ingestion pipeline
 - [ ] Webhook receiver
 - [ ] Diff-based change detection
 - [ ] Re-embedding + cache invalidation on update
+
 ### Phase 4 — Multilingual
 - [ ] Language detection node
 - [ ] Egyptian Arabic prompt tuning + testing
+
 ### Phase 5 — Voice
 - [ ] STT integration
 - [ ] TTS integration (language-aware)
+
 ### Phase 6 — Character/animation
 - [ ] Tone-tagging node
 - [ ] Frontend character + animation state mapping
+
 ### Phase 7 — Polish
 - [ ] Monitoring/logging
 - [ ] Rate limiting
 - [ ] Security review
 - [ ] (Optional) MCP wrapper over retrieval tools
+
 ## Notes / Context for Next Session
 - Owner knows all project details well but wants structured extraction
   help to avoid missing details — fixed question set per project, applied
@@ -77,4 +87,3 @@
 - Owner is being deliberate about commit hygiene on this project as a
   contrast to past habit of squash-publishing — treat commit granularity
   as part of the deliverable, not incidental.
- 
