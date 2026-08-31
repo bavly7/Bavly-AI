@@ -82,7 +82,7 @@
             placeholder; no achievements/learnings yet
       - [ ] dhub-rpa-automation — NOT YET CREATED. Starts next week per
             owner. Add once it actually begins.
-- [ ] Finalize schema (already drafted in SPECS.md §3) — needs
+- [x] Finalize schema (already drafted in SPECS.md §3) — needs
       `experience` source_type added, and `file_url` column added to
       `certifications` table (see SPECS.md update needed)
 - [x] Structured interview → pilot project #1 (KYC Onboarding System) —
@@ -117,16 +117,16 @@ mapping, and the one open CIB certificate question.
       field = AI Fundamentals. ONE remaining open item: "Bavly Waleed
       (CIB).pdf" — context/issuer still unknown, owner to confirm (cannot
       fetch Google Drive links directly — no auth access).
-- [ ] Owner uploading all 38 cert files directly to Supabase Storage once
+- [x] Owner uploading all 38 cert files directly to Supabase Storage once
       bucket exists; `file_url` mapping finalized against exact storage
       paths at that point.
-- [ ] Supabase project created (new account) + pgvector enabled
-- [ ] Supabase Storage bucket set up for certification PDFs
-- [ ] Schema migrated, pilot data populated
-- [ ] (Phase 2 start) Structured interview → FlyRank/Social Media
+- [x] Supabase project created (new account) + pgvector enabled
+- [x] Supabase Storage bucket set up for certification PDFs
+- [x] Schema migrated, pilot data populated
+- [x] (Phase 2 start) Structured interview → FlyRank/Social Media
       Publishing project narrative (distinct from the `experience/flyrank/`
       files, which cover the internship itself)
-- [ ] (Deferred, post-build) Structured interview → **Bavly AI itself**
+- [x] (Deferred, post-build) Structured interview → **Bavly AI itself**
       as project #4 — the system's own build story (architecture,
       challenges, decisions, learnings). Deliberately done LAST, after
       the system is actually built, so answers reflect real lived
@@ -135,6 +135,15 @@ mapping, and the one open CIB certificate question.
       chunk, to avoid the self-referential "chatbot describing itself
       via its own retrieval" complexity — same knowledge/projects/
       folder structure, just flagged.
+      ### 4. Technical Foundation & Infrastructure Setup (Extra Milestones)
+* [x] **Database Migrations & Version Control (Alembic)**: 
+  * Configured Alembic for schema migrations, handled environment configuration (`env.py`), and resolved connection interpolation and revision identifiers.
+* [x] **PostgreSQL Vector Extension (`pgvector`)**: 
+  * Enabled `pgvector` on Supabase to support high-dimensional similarity search for semantic retrieval.
+* [x] **Cohere Embedding Integration**: 
+  * Integrated Cohere's multilingual embedding model (`embed-multilingual-v3.0`) directly into the data ingestion pipeline to auto-generate vector representations for all knowledge markdown chunks.
+* [x] **Network & Connection Architecture**: 
+  * Configured Supabase connection pooling (IPv4-compatible port 6543) to seamlessly bypass network and local environment constraints.
 
 ### Phase 1 — Core RAG (text-only, linear, no graph)
 - [ ] Embedding pipeline (chunk → embed → store)
