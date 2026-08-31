@@ -85,9 +85,32 @@
 - [ ] Finalize schema (already drafted in SPECS.md §3) — needs
       `experience` source_type added, and `file_url` column added to
       `certifications` table (see SPECS.md update needed)
-- [ ] Structured interview → pilot project #1 (KYC Onboarding System)
-- [ ] Structured interview → pilot project #2 (Agentic RAG Retail
-      Assistant)
+- [x] Structured interview → pilot project #1 (KYC Onboarding System) —
+      COMPLETE. All 10 files built: overview, motivation, problem,
+      architecture, technical_decisions, challenges, tradeoffs,
+      improvements, learnings, recruiter_qa, github_metadata.
+- [x] Structured interview → pilot project #2 (Agentic RAG Retail
+      Assistant) — COMPLETE. All 10 files built.
+- [x] **Both pilot projects for Phase 0/1 now complete** (KYC +
+      Agentic RAG). Schema validated against two real, rich projects —
+      ready to move to Supabase setup / embedding pipeline in Phase 1,
+      or continue gathering the remaining 2 projects (Social Campaign
+      Publisher, PulseFit) first before implementation. Owner's call on
+      order.
+- [x] Structured interview → Social Campaign Publisher
+      (= flyrank-capstone-social-studio, confirmed same repo) — COMPLETE.
+      All 10 files built.
+- [x] Structured interview → PulseFit — COMPLETE. All 10 files built.
+      Note: `learnings.md` has 2 optional bonus questions unanswered
+      (proudest moment, unlimited-resources wish) — not blocking.
+
+## ALL 4 PROJECTS DATA COLLECTION COMPLETE
+KYC Onboarding, Agentic RAG Retail, Social Campaign Publisher, PulseFit —
+each with full 10-file knowledge sets (overview, motivation, problem,
+architecture, technical_decisions, challenges, tradeoffs, improvements,
+learnings, recruiter_qa, github_metadata). Phase 0 data foundation is
+essentially done pending: Supabase setup, certifications file_url
+mapping, and the one open CIB certificate question.
 - [x] Certifications table finalized — 38 files inventoried and mapped to
       title/issuer/field (see chat history for full mapping). "AI For
       Everyone" confirmed via web search: Andrew Ng / DeepLearning.AI,

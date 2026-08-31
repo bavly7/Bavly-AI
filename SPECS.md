@@ -173,7 +173,31 @@ Implemented as plain Python functions / LangGraph tools first (single
 consumer = this app). MCP wrapper over retrieval tools is an optional
 Phase 7 capstone feature, not a functional requirement.
 
-## 10. Build Phases
+## 11. Project Interview Question Set
+
+Standard question set used to build each project's `knowledge/projects/{name}/`
+folder (10 core files + 2 optional bonus questions folded into
+`learnings.md`). Applied consistently across all projects, including the
+deferred Bavly AI self-referential project, for retrieval consistency.
+
+1. Motivation — why this project specifically?
+2. Hardest challenge, as a story — not a list of bugs, but what it was
+   actually like to hit and solve the hardest problem.
+3. Personal learning — what changed in how the owner approaches problems,
+   not just a technical skill list.
+4. Recruiter Q&A — anticipated questions not obvious from the README.
+5. *(Optional, added after PulseFit)* Proudest moment/detail — something
+   the owner is personally proud of that a recruiter might not think to
+   ask about directly.
+6. *(Optional, added after PulseFit)* If given unlimited time/resources,
+   what's the one thing they'd add or change first?
+
+Everything else (overview, problem, architecture, technical_decisions,
+tradeoffs, improvements, github_metadata) is drafted directly from the
+project's README/documentation and doesn't require a live interview
+question, since READMEs already cover it well when they're detailed.
+
+## 12. Build Phases
 
 0. Data foundation (schema + pilot project extraction)
 1. Core RAG, text-only, linear (no graph), 2 pilot projects, deployed
