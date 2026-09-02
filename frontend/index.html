@@ -122,6 +122,21 @@
     font-size: 14px;
   }
   button:disabled { opacity: 0.5; cursor: not-allowed; }
+  table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 8px 0;
+  font-size: 13.5px;
+}
+  th, td {
+  border: 1px solid #2a3040;
+  padding: 8px 10px;
+  text-align: left;
+}
+  th {
+  background: #1b2030;
+  color: var(--accent);
+}
 </style>
 </head>
 <body>
@@ -137,11 +152,8 @@
   <input id="chat-input" type="text" placeholder="Ask something… (Arabic or English)" autocomplete="off" />
   <button id="send-btn" type="submit">Send</button>
 </form>
-
-<script>
-  // Point this at your deployed FastAPI backend (main.py). Left as a
-  // placeholder since hosting (SPECS.md §2) is still TBD / decided at
-  // deploy stage.
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script>
   const API_BASE = "http://localhost:8000";
 
   const chatEl = document.getElementById("chat");
@@ -149,12 +161,17 @@
   const inputEl = document.getElementById("chat-input");
   const sendBtn = document.getElementById("send-btn");
 
-  let sessionId = localStorage.getItem("bavly_session_id") || null;
+  // Fix 1: Ensure session_id is always a string
+  let sessionId = localStorage.getItem("bavly_session_id");
+  if (!sessionId) {
+    sessionId = crypto.randomUUID();
+    localStorage.setItem("bavly_session_id", sessionId);
+  }
 
   function addMessage(role, text, { links = [], sources = [], pending = false } = {}) {
     const wrap = document.createElement("div");
     wrap.className = `msg ${role}${pending ? " pending" : ""}`;
-    wrap.textContent = text;
+    wrap.innerHTML = marked.parse(text);
 
     if (links.length > 0) {
       const linksWrap = document.createElement("div");
@@ -163,8 +180,13 @@
         const a = document.createElement("a");
         a.className = "chip";
         a.href = l.url;
-        a.target = "_blank";
-        a.rel = "noopener noreferrer";
+        
+        // Fix 3: Only open new tab for HTTP/HTTPS links
+        if (l.url.startsWith("http")) {
+          a.target = "_blank";
+          a.rel = "noopener noreferrer";
+        }
+        
         a.textContent = l.title || l.platform;
         linksWrap.appendChild(a);
       });
@@ -213,15 +235,15 @@
       }
 
       const data = await res.json();
-      sessionId = data.session_id;
-      localStorage.setItem("bavly_session_id", sessionId);
 
       pendingEl.remove();
+
+      // Fix 2: Safe mapping with fallback to empty array []
       const links = [
-        ...data.certificate_links.map((c) => ({ title: c.title, url: c.url })),
-        ...data.profile_links.map((p) => ({ title: p.platform, url: p.url })),
+        ...(data.certificate_links || []).map((c) => ({ title: c.title, url: c.url })),
+        ...(data.profile_links || []).map((p) => ({ title: p.platform, url: p.url })),
       ];
-      addMessage("bot", data.answer, { links, sources: data.sources });
+      addMessage("bot", data.answer, { links, sources: data.sources || [] });
     } catch (e) {
       pendingEl.remove();
       addMessage("bot", "Something went wrong reaching the server. Please try again.");
@@ -240,7 +262,7 @@
   });
 
   loadHistory();
-</script>
+  </script>
 
 </body>
 </html>

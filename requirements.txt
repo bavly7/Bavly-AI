@@ -7,3 +7,4 @@ cohere
 groq
 fastapi
 uvicorn[standard]
+langgraph

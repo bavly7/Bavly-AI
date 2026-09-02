@@ -150,14 +150,14 @@ mapping, and the one open CIB certificate question.
 - [x] Retrieval function (vector search + structured lookup)
 - [x] Generation function (grounded answer + refusal fallback)
 - [x] Validate against pilot data (no hallucination, refusal works)
-- [ ] FastAPI endpoint wrapping retrieval + generation
-- [ ] Minimal frontend chat UI, deployed publicly
+- [x] FastAPI endpoint wrapping retrieval + generation
+- [x] Minimal frontend chat UI, deployed publicly
 
 ### Phase 2 — Scale data + LangGraph
-- [ ] Remaining project interviews + bulk ingest
-- [ ] Port linear RAG into LangGraph (intent routing, confidence gating)
-- [ ] Conversation history/state (LangGraph checkpointer)
-- [ ] Caching node
+- [x] Remaining project interviews + bulk ingest
+- [x] Port linear RAG into LangGraph (intent routing, confidence gating)
+- [x] Conversation history/state (LangGraph checkpointer)
+- [x] Caching node
 
 ### Phase 3 — GitHub ingestion pipeline
 - [ ] Webhook receiver

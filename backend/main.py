@@ -34,6 +34,10 @@ from sqlalchemy import create_engine, text
 from backend.generation import generate
 from backend.retrieval import RetrievedChunk
 
+from backend.graph import run_graph
+
+import traceback
+
 load_dotenv()
 
 DATABASE_URL = os.environ["DATABASE_URL"]
@@ -130,34 +134,33 @@ def _save_message(session_id: str, role: str, content: str) -> None:
 def health():
     return {"status": "ok"}
 
-
 @app.post("/chat", response_model=ChatResponse)
-def chat(req: ChatRequest):
-    message = req.message.strip()
-    if not message:
-        raise HTTPException(status_code=400, detail="message must not be empty")
-
-    session_id = _ensure_session(req.session_id)
-
-    _save_message(session_id, "user", message)
-
+async def chat_endpoint(request: ChatRequest):
     try:
-        result = generate(message)
+        
+        active_session_id = _ensure_session(request.session_id)
+
+        _save_message(active_session_id, "user", request.message)
+
+
+        result = run_graph(
+            session_id=active_session_id,
+            query=request.message
+        )
+
+        
+        _save_message(active_session_id, "assistant", result["answer"])
+
+        return ChatResponse(
+            session_id=active_session_id,  
+            answer=result["answer"],
+            sources=result.get("sources", []),
+            certificate_links=result.get("certificate_links", []),
+            profile_links=result.get("profile_links", []),
+        )
     except Exception as e:
-        # Don't let a Groq/Cohere/DB hiccup surface as a raw 500 with a
-        # stack trace to the recruiter-facing frontend.
-        raise HTTPException(status_code=502, detail=f"generation failed: {e}")
-
-    _save_message(session_id, "assistant", result["answer"])
-
-    return ChatResponse(
-        session_id=session_id,
-        answer=result["answer"],
-        sources=result["sources"],
-        certificate_links=result["certificate_links"],
-        profile_links=result["profile_links"],
-    )
-
+        print("🔥 ERROR IN /chat:", traceback.format_exc())
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/sessions/{session_id}/messages")
 def get_session_messages(session_id: str):

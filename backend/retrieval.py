@@ -137,28 +137,22 @@ def extract_cert_field_filter(query: str) -> str | None:
     return None
 
 
-def get_certifications(field_filter: str | None = None) -> list[dict]:
-    """Structured lookup — no embedding needed, near-zero hallucination
-    risk since it's a direct DB read, not generation."""
-    sql = "SELECT title, issuer, date, field, file_url FROM certifications"
-    params = {}
-    if field_filter:
-        sql += " WHERE field ILIKE :field_filter"
-        params["field_filter"] = f"%{field_filter}%"
-
+def get_certifications(field_filter=None):
     with engine.connect() as conn:
-        rows = conn.execute(text(sql), params).fetchall()
-
-    return [
-        {
-            "title": row.title,
-            "issuer": row.issuer,
-            "date": row.date,
-            "field": row.field,
-            "file_url": row.file_url,
-        }
-        for row in rows
-    ]
+        if field_filter:
+    
+            query = text("""
+                SELECT title, issuer, file_url FROM certifications 
+                WHERE LOWER(title) LIKE LOWER(:flt) 
+                   OR LOWER(issuer) LIKE LOWER(:flt)
+            """)
+            rows = conn.execute(query, {"flt": f"%{field_filter}%"}).fetchall()
+        else:
+        
+            query = text("SELECT title, issuer, file_url FROM certifications")
+            rows = conn.execute(query).fetchall()
+            
+    return [{"title": r.title, "issuer": r.issuer, "file_url": r.file_url} for r in rows]
 
 
 def retrieve(query: str) -> dict:
