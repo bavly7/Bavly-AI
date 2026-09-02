@@ -44,15 +44,15 @@ projects (
 )
 
 -- Narrative / RAG-searchable chunks
-knowledge_chunks (
-  id,
-  source_type,        -- 'personal_bio' | 'project_narrative' | 'github_readme' | 'certification'
-  project_id,          -- nullable FK -> projects
-  content,              -- raw text chunk
-  embedding VECTOR(N),   -- pgvector column, N = embedding model dim
-  language,               -- 'ar-EG' | 'en' | 'auto'
-  created_at, updated_at
-)
+ knowledge_chunks (
+   id,
+  source_type,       -- 'personal_bio' | 'project_narrative' | 'github_readme' | 'certification' |  'experience'
+   project_id,          -- nullable FK -> projects
+   content,              -- raw text chunk
+   embedding VECTOR(N),   -- pgvector column, N = embedding model dim
+   language,               -- 'ar-EG' | 'en' | 'auto'
+   created_at, updated_at
+ )
 
 -- Conversation memory
 sessions (id, created_at, last_active)

@@ -40,7 +40,7 @@ co = cohere.Client(COHERE_API_KEY)
 engine = create_engine(DATABASE_URL)
 Session = sessionmaker(bind=engine)
 
-
+#this function generate embeddings for the knowledge folder (data folder of mine) return embedding 
 def embed(text: str) -> list[float]:
     """Generate a single embedding via Cohere multilingual v3.0.
     input_type='search_document' is used for stored content (vs.
@@ -95,7 +95,7 @@ PROJECTS = [
     },
 ]
 
-
+#for each project in the PROJECTS list, check if it already exists in the database. If it does, store its ID in a dictionary. If not, create a new Project object, add it to the session, and store its ID in the dictionary. Finally, commit the session and return the dictionary mapping folder names to project IDs.
 def insert_projects(session):
     project_id_by_folder = {}
     for p in PROJECTS:

@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Bavly — AI Portfolio Chat</title>
+<style>
+  :root {
+    --bg: #0f1115;
+    --panel: #171a21;
+    --bubble-user: #2b6cb0;
+    --bubble-bot: #232733;
+    --text: #e6e8ec;
+    --muted: #8b93a3;
+    --accent: #4f9dff;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+  }
+  header {
+    padding: 16px 20px;
+    border-bottom: 1px solid #22262f;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  header h1 { font-size: 16px; margin: 0; font-weight: 600; }
+  header span { color: var(--muted); font-size: 13px; }
+
+  #chat {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    max-width: 720px;
+    width: 100%;
+    margin: 0 auto;
+  }
+  .msg {
+    max-width: 80%;
+    padding: 10px 14px;
+    border-radius: 14px;
+    line-height: 1.45;
+    font-size: 14.5px;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+  }
+  .msg.user {
+    align-self: flex-end;
+    background: var(--bubble-user);
+    border-bottom-right-radius: 4px;
+  }
+  .msg.bot {
+    align-self: flex-start;
+    background: var(--bubble-bot);
+    border-bottom-left-radius: 4px;
+  }
+  .msg.bot.pending { color: var(--muted); font-style: italic; }
+
+  .links {
+    margin-top: 8px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: #1b2030;
+    border: 1px solid #2a3040;
+    color: var(--accent);
+    text-decoration: none;
+    font-size: 12.5px;
+    padding: 5px 10px;
+    border-radius: 999px;
+  }
+  .chip:hover { border-color: var(--accent); }
+
+  .sources {
+    margin-top: 6px;
+    font-size: 11px;
+    color: var(--muted);
+  }
+
+  form {
+    display: flex;
+    gap: 10px;
+    padding: 16px 20px 20px;
+    max-width: 720px;
+    width: 100%;
+    margin: 0 auto;
+  }
+  input[type="text"] {
+    flex: 1;
+    background: var(--panel);
+    border: 1px solid #262b36;
+    color: var(--text);
+    padding: 12px 14px;
+    border-radius: 10px;
+    font-size: 14.5px;
+    outline: none;
+  }
+  input[type="text"]:focus { border-color: var(--accent); }
+  button {
+    background: var(--accent);
+    color: #0b0d11;
+    border: none;
+    padding: 0 18px;
+    border-radius: 10px;
+    font-weight: 600;
+    cursor: pointer;
+    font-size: 14px;
+  }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Bavly</h1>
+  <span>AI portfolio assistant — ask about projects, certifications, or experience</span>
+</header>
+
+<div id="chat"></div>
+
+<form id="chat-form">
+  <input id="chat-input" type="text" placeholder="Ask something… (Arabic or English)" autocomplete="off" />
+  <button id="send-btn" type="submit">Send</button>
+</form>
+
+<script>
+  // Point this at your deployed FastAPI backend (main.py). Left as a
+  // placeholder since hosting (SPECS.md §2) is still TBD / decided at
+  // deploy stage.
+  const API_BASE = "http://localhost:8000";
+
+  const chatEl = document.getElementById("chat");
+  const formEl = document.getElementById("chat-form");
+  const inputEl = document.getElementById("chat-input");
+  const sendBtn = document.getElementById("send-btn");
+
+  let sessionId = localStorage.getItem("bavly_session_id") || null;
+
+  function addMessage(role, text, { links = [], sources = [], pending = false } = {}) {
+    const wrap = document.createElement("div");
+    wrap.className = `msg ${role}${pending ? " pending" : ""}`;
+    wrap.textContent = text;
+
+    if (links.length > 0) {
+      const linksWrap = document.createElement("div");
+      linksWrap.className = "links";
+      links.forEach((l) => {
+        const a = document.createElement("a");
+        a.className = "chip";
+        a.href = l.url;
+        a.target = "_blank";
+        a.rel = "noopener noreferrer";
+        a.textContent = l.title || l.platform;
+        linksWrap.appendChild(a);
+      });
+      wrap.appendChild(linksWrap);
+    }
+
+    if (sources.length > 0) {
+      const src = document.createElement("div");
+      src.className = "sources";
+      src.textContent = "Sources: " + sources.join(", ");
+      wrap.appendChild(src);
+    }
+
+    chatEl.appendChild(wrap);
+    chatEl.scrollTop = chatEl.scrollHeight;
+    return wrap;
+  }
+
+  async function loadHistory() {
+    if (!sessionId) return;
+    try {
+      const res = await fetch(`${API_BASE}/sessions/${sessionId}/messages`);
+      if (!res.ok) return;
+      const messages = await res.json();
+      messages.forEach((m) => addMessage(m.role === "user" ? "user" : "bot", m.content));
+    } catch (e) {
+      // No history available — fine, just start fresh.
+    }
+  }
+
+  async function sendMessage(text) {
+    addMessage("user", text);
+    const pendingEl = addMessage("bot", "…", { pending: true });
+    sendBtn.disabled = true;
+
+    try {
+      const res = await fetch(`${API_BASE}/chat`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: text, session_id: sessionId }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || `HTTP ${res.status}`);
+      }
+
+      const data = await res.json();
+      sessionId = data.session_id;
+      localStorage.setItem("bavly_session_id", sessionId);
+
+      pendingEl.remove();
+      const links = [
+        ...data.certificate_links.map((c) => ({ title: c.title, url: c.url })),
+        ...data.profile_links.map((p) => ({ title: p.platform, url: p.url })),
+      ];
+      addMessage("bot", data.answer, { links, sources: data.sources });
+    } catch (e) {
+      pendingEl.remove();
+      addMessage("bot", "Something went wrong reaching the server. Please try again.");
+      console.error(e);
+    } finally {
+      sendBtn.disabled = false;
+    }
+  }
+
+  formEl.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const text = inputEl.value.trim();
+    if (!text) return;
+    inputEl.value = "";
+    sendMessage(text);
+  });
+
+  loadHistory();
+</script>
+
+</body>
+</html>

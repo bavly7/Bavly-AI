@@ -146,10 +146,10 @@ mapping, and the one open CIB certificate question.
   * Configured Supabase connection pooling (IPv4-compatible port 6543) to seamlessly bypass network and local environment constraints.
 
 ### Phase 1 — Core RAG (text-only, linear, no graph)
-- [ ] Embedding pipeline (chunk → embed → store)
-- [ ] Retrieval function (vector search + structured lookup)
-- [ ] Generation function (grounded answer + refusal fallback)
-- [ ] Validate against pilot data (no hallucination, refusal works)
+- [x] Embedding pipeline (chunk → embed → store)
+- [x] Retrieval function (vector search + structured lookup)
+- [x] Generation function (grounded answer + refusal fallback)
+- [x] Validate against pilot data (no hallucination, refusal works)
 - [ ] FastAPI endpoint wrapping retrieval + generation
 - [ ] Minimal frontend chat UI, deployed publicly
 
