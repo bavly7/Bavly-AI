@@ -67,7 +67,7 @@ client = Groq(api_key=GROQ_API_KEY)
 
 HISTORY_TURNS = 5  # ~5 turns = up to 10 messages, per spec
 CACHE_SIMILARITY_THRESHOLD = 0.92  # near-duplicate query match, stricter than retrieval confidence
-CACHE_TTL_HOURS = 24 * 7 # one week cache lifetime, per spec from its adv (data freshness , edge cases , database size) 
+CACHE_TTL_HOURS = 24 * 7 # one week cache lifetime, per spec from its adv (data freshness , edge cases , database size)
 
 # Same hardcoded, non-LLM-generated profile links as Phase 1 — a router
 # intent can point here, but the URLs themselves are never LLM output.
@@ -267,7 +267,7 @@ intents: ["rag_content"] and let downstream confidence gating handle it."""
 
 def route_intents(state: GraphState) -> dict:
     parsed = None
-    
+
     try:
         response = client.chat.completions.create(
             model=ROUTER_MODEL,
@@ -282,9 +282,9 @@ def route_intents(state: GraphState) -> dict:
     except Exception as e:
         print(f"⚠️ Router failed with error: {e}")
         parsed = {
-            "intents": ["rag_content"], 
-            "cert_domain": None, 
-            "project_name": None, 
+            "intents": ["rag_content"],
+            "cert_domain": None,
+            "project_name": None,
             "language": "en"
         }
 
@@ -328,11 +328,11 @@ def rag_content_node(state: GraphState) -> dict:
 def certifications_node(state: GraphState) -> dict:
     domain = state.get("cert_domain")
     certs = get_certifications(field_filter=domain)
-    
-    
+
+
     if not domain and len(certs) > 40:
         certs = certs[:40]
-        
+
     return {"retrieved_data": {"certifications": certs}}
 
 
@@ -412,19 +412,26 @@ def generate_answer(state: GraphState) -> dict:
         if language == "ar" else "Respond in English."
     )
     system_prompt = (
-        "You are Bavly's friendly AI portfolio assistant, representing Bavly Waleed, "
-        "a Computer Vision & AI engineer, speaking to recruiters or visitors.\n\n"
+        "You ARE Bavly Waleed — a Computer Vision & AI engineer. You're chatting with "
+        "a recruiter or visitor about your own background, projects, and experience.\n\n"
         "PERSONALITY & TONE:\n"
         "- Be warm, friendly, and conversational (ودود، مرحب، ودمك خفيف).\n"
-        "- Use emojis naturally and tastefully (حط إيموجيز بشكل لطيف ومش أوفر).\n"
-        "- Match the user's language: if they speak Egyptian Arabic, reply in natural Egyptian Arabic; if English, reply in friendly English.\n\n"
-        "SMART & FLEXIBLE RULES:\n"
-        "- Filter the retrieved context smartly: if the database returned extra info the user didn't ask for, ignore it and keep the answer focused only on what they want.\n"
-        "- Never invent or hallucinate facts. Stick to the provided CONTEXT, CERTIFICATIONS, or PROFILES for factual info.\n"
-        "- Do not include raw URLs in your text — links are handled separately via chips.\n"
-        "- The user's message may contain multiple intents — address them smoothly.\n\n"
-        "PROACTIVE CLOSING:\n"
-        "- Always end your response with a friendly, proactive question or suggestion (e.g., 'حب أوريك تفاصيل أكتر عن المشروع ده؟' or 'Would you like to check his GitHub or certifications?').\n\n"
+        "- Use emojis naturally and tastefully (حط إيموجيز بشكل لطيف).\n"
+        "- Speak in FIRST PERSON ('I', 'my', 'me') — you ARE Bavly, not an assistant talking about him.\n"
+        "- Match the user's language: Egyptian Arabic → reply in Egyptian Arabic; English → English.\n\n"
+        "GROUNDING RULES:\n"
+        "- Only state facts that are in CONTEXT, CERTIFICATIONS, or PROFILES.\n"
+        "- If something isn't in your data, say so directly and briefly — don't over-explain.\n"
+        "- Never invent projects, roles, or experiences not in the context.\n"
+        "- Do not include raw URLs in your text — links are handled separately.\n\n"
+        "SMART FILTERING:\n"
+        "- If the user asks about something specific (e.g., 'Exology'), and it's not in your data, "
+        "briefly say you don't have info about that specific thing, then pivot to what you DO have "
+        "that's related (e.g., 'but here's my experience at FlyRank...').\n"
+        "- Connect the conversation to your portfolio naturally — be helpful, not sales-y.\n\n"
+        "CLOSING:\n"
+        "- End with a short, friendly follow-up or offer to share more (e.g., 'Want me to show you the code?' or 'حب أقولك أكتر عن المشروع ده؟').\n"
+        "- Keep it casual and genuine — like you're talking to a colleague, not pitching.\n\n"
         f"- {lang_instruction}"
     )
     user_prompt = (

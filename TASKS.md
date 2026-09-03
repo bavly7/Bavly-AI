@@ -160,6 +160,11 @@ mapping, and the one open CIB certificate question.
 - [x] Caching node
 
 ### Phase 3 — GitHub ingestion pipeline
+- [x] Database Readiness for Webhook Ingestion
+  - [x] Add `file_path` & `chunk_index` columns to `knowledge_chunks` (Schema migration)
+  - [x] Enforce unique constraint `(file_path, chunk_index)`
+  - [x] Backfill existing knowledge chunks with deterministic file paths
+  - [x] Update `populate_db.py` to support `file_path` replace-all ingestion
 - [ ] Webhook receiver
 - [ ] Diff-based change detection
 - [ ] Re-embedding + cache invalidation on update

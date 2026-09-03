@@ -7,6 +7,9 @@ Populates Supabase Postgres with:
   3. knowledge_chunks     (one row per .md file under knowledge/, with a
                            Cohere embedding generated from its content)
 
+NEW: Each chunk now includes file_path and chunk_index for deterministic
+     identification during GitHub webhook updates.
+
 Run from the project root (D:\Gam3a\for_me\Portfolio):
     python scripts/populate_db.py
 
@@ -16,7 +19,6 @@ Requires in .env:
 """
 
 import os
-import glob
 import time
 from pathlib import Path
 
@@ -40,7 +42,7 @@ co = cohere.Client(COHERE_API_KEY)
 engine = create_engine(DATABASE_URL)
 Session = sessionmaker(bind=engine)
 
-#this function generate embeddings for the knowledge folder (data folder of mine) return embedding 
+
 def embed(text: str) -> list[float]:
     """Generate a single embedding via Cohere multilingual v3.0.
     input_type='search_document' is used for stored content (vs.
@@ -95,7 +97,7 @@ PROJECTS = [
     },
 ]
 
-#for each project in the PROJECTS list, check if it already exists in the database. If it does, store its ID in a dictionary. If not, create a new Project object, add it to the session, and store its ID in the dictionary. Finally, commit the session and return the dictionary mapping folder names to project IDs.
+
 def insert_projects(session):
     project_id_by_folder = {}
     for p in PROJECTS:
@@ -120,7 +122,6 @@ def insert_projects(session):
 # ---------------------------------------------------------------------
 # 2. CERTIFICATIONS
 # ---------------------------------------------------------------------
-# (title, issuer, date, field, filename)
 
 CERTIFICATIONS = [
     ("AI Fundamentals", "Orange Digital Center Egypt", "Nov 2024", "AI Fundamentals", "Orange_Certification.pdf"),
@@ -227,6 +228,13 @@ def insert_knowledge_chunks(session, project_id_by_folder):
 
 
 def _insert_chunk(session, md_file: Path, source_type: str, project_id):
+    """
+    Insert a chunk for the given markdown file.
+
+    Now uses file_path + chunk_index as the unique identifier:
+    - If a chunk with that file_path already exists, DELETE it first (update scenario)
+    - Then insert the new chunk with the current content and embedding
+    """
     content = md_file.read_text(encoding="utf-8").strip()
     if not content:
         return
@@ -236,13 +244,23 @@ def _insert_chunk(session, md_file: Path, source_type: str, project_id):
         print(f"  - skipping placeholder-only file: {md_file}")
         return
 
-    existing = (
-        session.query(KnowledgeChunk)
-        .filter_by(content=content)
-        .first()
-    )
+    # Build the file_path relative to knowledge/ root
+    file_path = str(md_file.relative_to(KNOWLEDGE_ROOT)).replace("\\", "/")
+
+    # For now, each file = one chunk, so chunk_index is always 0
+    # In the future, if we split files into multiple chunks, this will increment
+    chunk_index = 0
+
+    # Check if a chunk with this file_path already exists
+    existing = session.query(KnowledgeChunk).filter_by(file_path=file_path).first()
     if existing:
-        return
+        # Content unchanged? Skip re-embedding (saves API calls)
+        if existing.content == content:
+            print(f"  = chunk unchanged: {file_path}")
+            return
+        # Content changed? Delete old chunk, will re-insert below
+        session.delete(existing)
+        print(f"  ~ chunk updated: {file_path}")
 
     language = detect_language(content)
     vector = embed(content)
@@ -253,9 +271,11 @@ def _insert_chunk(session, md_file: Path, source_type: str, project_id):
         content=content,
         embedding=vector,
         language=language,
+        file_path=file_path,
+        chunk_index=chunk_index,
     )
     session.add(chunk)
-    print(f"  + chunk: {md_file.relative_to(KNOWLEDGE_ROOT)}  ({source_type})")
+    print(f"  + chunk: {file_path}  ({source_type})")
 
     # Cohere free tier is rate-limited; small delay keeps us safely under it
     time.sleep(0.3)

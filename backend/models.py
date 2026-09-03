@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import (
-    Column, Text, ForeignKey, ARRAY, TIMESTAMP, Date, CheckConstraint, func
+    Column, Text, ForeignKey, ARRAY, TIMESTAMP, Date, CheckConstraint, func, UniqueConstraint, Integer
 )
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import declarative_base, relationship
@@ -48,6 +48,9 @@ class KnowledgeChunk(Base):
             "source_type in ('personal_bio','experience','project_narrative','github_readme','certification')",
             name="knowledge_chunks_source_type_check",
         ),
+        # Unique constraint on file_path + chunk_index for GitHub-ingested chunks
+        # Nullable file_path means manually-added chunks won't conflict
+        UniqueConstraint("file_path", "chunk_index", name="uq_chunk_source", postgresql_nulls_not_distinct=False),
     )
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -56,6 +59,8 @@ class KnowledgeChunk(Base):
     content = Column(Text, nullable=False)
     embedding = Column(Vector(EMBEDDING_DIM))
     language = Column(Text, default="auto")
+    file_path = Column(Text)       # e.g., "projects/kyc-onboarding/architecture.md"
+    chunk_index = Column(Integer)  # 0, 1, 2, ... position within file after splitting
     created_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
     updated_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
 
