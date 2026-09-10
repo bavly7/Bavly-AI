@@ -300,6 +300,9 @@ def process_webhook_changes(changes: list[dict]) -> dict:
         invalidate_cache_for_changes(file_paths, session)
         results["cache_invalidated"] = True
 
+        # Commit cache invalidation
+        session.commit()
+
     except Exception as e:
         session.rollback()
         print(f"❌ Fatal error during processing: {e}")
