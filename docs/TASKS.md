@@ -171,9 +171,19 @@ mapping, and the one open CIB certificate question.
 - [x] Re-embedding + cache invalidation on update (background processing with Cohere API)
 - [x] Test suite and documentation (tests/test_webhook.py, docs/PHASE3_WEBHOOK_SETUP.md)
 
-### Phase 4 — Multilingual
-- [ ] Language detection node
-- [ ] Egyptian Arabic prompt tuning + testing
+### Phase 4 — Multilingual (PAUSED - system already works well)
+- [x] Language detection (router node already detects language)
+- [x] Egyptian Arabic support (tested, working well via prompt instruction)
+- [~] Token optimization (deferred until hitting rate limits - see docs/TOKEN_OPTIMIZATION.md)
+
+**Status:** Arabic responses are natural and accurate. System uses ~1,870 tokens/message 
+(~107 messages/day on Groq free tier). When rate limits become an issue, implement 
+optimizations documented in TOKEN_OPTIMIZATION.md (can reach 194+ messages/day).
+
+**Next steps when needed:**
+1. Remove security_check node (saves 650 tokens/msg if >95% pass rate)
+2. Reduce context from 5→3 chunks (saves 120 tokens/msg)
+3. See TOKEN_OPTIMIZATION.md for full guide
 
 ### Phase 5 — Voice
 - [ ] STT integration
