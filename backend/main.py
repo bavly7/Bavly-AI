@@ -1,32 +1,29 @@
 """
-Phase 1 — FastAPI endpoint
+Phase 1-3 — FastAPI Backend
 
-Thin HTTP wrapper around generation.generate(), which itself wraps
-retrieval.retrieve(). No new logic lives here — this file's only job is
-transport (HTTP in, JSON out) plus session/message persistence into the
-`sessions` / `messages` tables from SPECS.md §3.
+Main application entry point. Handles:
+  - Phase 1/2: Chat endpoint with LangGraph RAG orchestration
+  - Phase 3: GitHub webhook receiver for knowledge base auto-updates
 
 RULES.md notes respected here:
   - #4: every answer stays traceable to sources (passed straight through
     from generation.generate(), not altered).
-  - #12/#15: no LangGraph, no intent classifier, no extra framework layer
-    — Phase 1 stays linear, per SPECS.md build order.
   - #16: language handling is entirely generation.py's responsibility;
     this file does not re-detect or override language.
 
-Not implemented here (intentionally, out of Phase 1 scope):
-  - check_cache / write_cache (answer_cache table) — Phase 2, LangGraph
-    node per SPECS.md §4.
-  - tone_tag — Phase 6.
-  - STT/TTS endpoints — Phase 5.
+Phases implemented:
+  - Phase 1: Linear RAG (retrieval + generation)
+  - Phase 2: LangGraph orchestration (routing, caching, security)
+  - Phase 3: GitHub webhook ingestion (diff-based re-embedding)
 """
 
 import os
 import uuid
 from datetime import datetime, timezone
+from contextlib import asynccontextmanager
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, BackgroundTasks, Header, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from sqlalchemy import create_engine, text
@@ -35,6 +32,8 @@ from backend.generation import generate
 from backend.retrieval import RetrievedChunk
 
 from backend.graph import run_graph
+from backend.webhook import handle_github_webhook
+from backend.ingestion import process_webhook_changes
 
 import traceback
 
@@ -178,3 +177,38 @@ def get_session_messages(session_id: str):
         {"role": r.role, "content": r.content, "created_at": r.created_at.isoformat()}
         for r in rows
     ]
+
+
+# ---------------------------------------------------------------------------
+# Phase 3 — GitHub Webhook Endpoint
+# ---------------------------------------------------------------------------
+
+@app.post("/webhook/github")
+async def github_webhook_endpoint(
+    request: Request,
+    background_tasks: BackgroundTasks,
+    x_hub_signature_256: str | None = Header(None)
+):
+    """
+    Receives GitHub push webhooks and processes knowledge base updates.
+
+    Signature verification happens in webhook.py. Changes are processed
+    in the background to avoid webhook timeouts (GitHub expects <10s response).
+    """
+    try:
+        # Parse and validate webhook (returns immediately)
+        result = await handle_github_webhook(request, x_hub_signature_256)
+
+        # If changes detected, queue background processing
+        if result["status"] == "queued":
+            changes = result["changes"]
+            background_tasks.add_task(process_webhook_changes, changes)
+            print(f"✅ Queued {len(changes)} file change(s) for processing")
+
+        return result
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print("🔥 ERROR IN /webhook/github:", traceback.format_exc())
+        raise HTTPException(status_code=500, detail=str(e))
