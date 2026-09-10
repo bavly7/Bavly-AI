@@ -31,6 +31,7 @@ class Project(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     name = Column(Text, nullable=False)
+    folder_name = Column(Text, unique=True, nullable=False)  # e.g., "kyc-onboarding"
     github_repo = Column(Text)
     tech_stack = Column(ARRAY(Text))
     start_date = Column(Date)

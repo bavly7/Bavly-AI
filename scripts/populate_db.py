@@ -107,6 +107,7 @@ def insert_projects(session):
             continue
         proj = Project(
             name=p["name"],
+            folder_name=p["folder"],  # NEW: populate folder_name column
             github_repo=p["github_repo"],
             tech_stack=p["tech_stack"],
             summary=p["summary"],
