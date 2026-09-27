@@ -68,6 +68,7 @@ class GraphState(TypedDict, total=False):
     query: str
     language: str
     history: list[dict]
+    voice_mode: bool  # True when user spoke (not typed)
 
     # Router output
     intents: list[str]
@@ -390,6 +391,7 @@ def _format_history(history: list[dict]) -> str:
 
 def generate_answer(state: GraphState) -> dict:
     language = state.get("language", "en")
+    voice_mode = state.get("voice_mode", False)
 
     if not state["confident"]:
         return {
@@ -416,6 +418,18 @@ def generate_answer(state: GraphState) -> dict:
         "Respond in Egyptian Arabic colloquial (not Modern Standard Arabic)."
         if language == "ar" else "Respond in English."
     )
+
+    # Voice mode: optimize for listening while keeping it informative
+    length_instruction = ""
+    if voice_mode:
+        length_instruction = (
+            "\n\n**VOICE MODE - CRITICAL**: The user is LISTENING, not reading. "
+            "Keep your response CONCISE but COMPLETE (1100-1400 characters max). "
+            "Cover the key points clearly without unnecessary elaboration. "
+            "Aim for ~45-60 seconds of speech when read aloud. "
+            "Make it organized, readable AND listenable."
+        )
+
     system_prompt = (
         "You ARE Bavly Waleed — a Computer Vision & AI engineer. You're chatting with "
         "a recruiter or visitor about your own background, projects, and experience.\n\n"
@@ -444,7 +458,7 @@ def generate_answer(state: GraphState) -> dict:
         "- End with a short, friendly follow-up or offer to share more.\n"
         "- Keep it casual and genuine.\n\n"
 
-        f"- {lang_instruction}"
+        f"- {lang_instruction}{length_instruction}"
     )
     user_prompt = (
         f"CONVERSATION HISTORY:\n{_format_history(state.get('history', []))}\n\n"
@@ -582,7 +596,7 @@ def build_graph():
 _compiled_graph = None
 
 
-def run_graph(session_id: str, query: str) -> dict:
+def run_graph(session_id: str, query: str, voice_mode: bool = False) -> dict:
     global _compiled_graph
     if _compiled_graph is None:
         _compiled_graph = build_graph()
@@ -590,6 +604,7 @@ def run_graph(session_id: str, query: str) -> dict:
     final_state = _compiled_graph.invoke({
         "session_id": session_id,
         "query": query,
+        "voice_mode": voice_mode,
         "security_retry_count": 0,
     })
 

@@ -185,9 +185,21 @@ optimizations documented in TOKEN_OPTIMIZATION.md (can reach 194+ messages/day).
 2. Reduce context from 5→3 chunks (saves 120 tokens/msg)
 3. See TOKEN_OPTIMIZATION.md for full guide
 
-### Phase 5 — Voice
-- [ ] STT integration
-- [ ] TTS integration (language-aware)
+### Phase 5 — Voice (COMPLETED 2026-09-25)
+- [x] STT integration (Groq Whisper-large-v3)
+- [x] TTS integration (Edge TTS, language-aware)
+- [x] Backend voice module (backend/voice.py)
+- [x] API endpoints (/api/stt, /api/tts)
+- [x] Frontend voice UI (microphone recording, audio playback)
+- [x] Test suite (tests/test_voice.py)
+
+**Implementation notes:**
+- STT: Groq Whisper API with automatic language detection from audio
+- TTS: Edge TTS with ar-EG-ShakirNeural (Arabic) and en-US-GuyNeural (English)
+- Language detection: Double-layered (Whisper detects from audio, regex detects from text)
+- Frontend: MediaRecorder API for recording, audio playback with visual feedback
+- No new environment variables needed (uses existing GROQ_API_KEY)
+- Voice is pure I/O layer — LangGraph pipeline unchanged
 
 ### Phase 6 — Character/animation
 - [ ] Tone-tagging node

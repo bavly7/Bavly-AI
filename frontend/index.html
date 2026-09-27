@@ -122,6 +122,57 @@
     font-size: 14px;
   }
   button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  /* Voice controls */
+  .voice-controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  #mic-btn {
+    background: var(--panel);
+    border: 2px solid var(--accent);
+    color: var(--accent);
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    transition: all 0.2s;
+  }
+  #mic-btn:hover { background: var(--accent); color: #0b0d11; }
+  #mic-btn.recording {
+    background: #c53030;
+    border-color: #c53030;
+    color: white;
+    animation: pulse 1.5s infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.6; }
+  }
+  #recording-status {
+    font-size: 12px;
+    color: var(--accent);
+    font-weight: 500;
+  }
+  .play-audio-btn {
+    background: transparent;
+    border: 1px solid var(--accent);
+    color: var(--accent);
+    padding: 4px 10px;
+    font-size: 12px;
+    margin-top: 6px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .play-audio-btn:hover {
+    background: var(--accent);
+    color: #0b0d11;
+  }
   table {
   width: 100%;
   border-collapse: collapse;
@@ -149,6 +200,10 @@
 <div id="chat"></div>
 
 <form id="chat-form">
+  <div class="voice-controls">
+    <button id="mic-btn" type="button" title="Record voice message">🎤</button>
+    <span id="recording-status" style="display: none;">Recording...</span>
+  </div>
   <input id="chat-input" type="text" placeholder="Ask something… (Arabic or English)" autocomplete="off" />
   <button id="send-btn" type="submit">Send</button>
 </form>
@@ -160,6 +215,13 @@
   const formEl = document.getElementById("chat-form");
   const inputEl = document.getElementById("chat-input");
   const sendBtn = document.getElementById("send-btn");
+  const micBtn = document.getElementById("mic-btn");
+  const recordingStatus = document.getElementById("recording-status");
+
+  let mediaRecorder = null;
+  let audioChunks = [];
+  let currentLanguage = "en"; // Track last detected language for TTS
+  let currentAudio = null; // Track currently playing audio for stop functionality
 
   // Fix 1: Ensure session_id is always a string
   let sessionId = localStorage.getItem("bavly_session_id");
@@ -168,10 +230,19 @@
     localStorage.setItem("bavly_session_id", sessionId);
   }
 
-  function addMessage(role, text, { links = [], sources = [], pending = false } = {}) {
+  function addMessage(role, text, { links = [], sources = [], pending = false, language = "en" } = {}) {
     const wrap = document.createElement("div");
     wrap.className = `msg ${role}${pending ? " pending" : ""}`;
     wrap.innerHTML = marked.parse(text);
+
+    // Set text direction based on language
+    if (language === "ar" || /[؀-ۿ]/.test(text)) {
+      wrap.style.direction = "rtl";
+      wrap.style.textAlign = "right";
+    } else {
+      wrap.style.direction = "ltr";
+      wrap.style.textAlign = "left";
+    }
 
     if (links.length > 0) {
       const linksWrap = document.createElement("div");
@@ -180,13 +251,13 @@
         const a = document.createElement("a");
         a.className = "chip";
         a.href = l.url;
-        
+
         // Fix 3: Only open new tab for HTTP/HTTPS links
         if (l.url.startsWith("http")) {
           a.target = "_blank";
           a.rel = "noopener noreferrer";
         }
-        
+
         a.textContent = l.title || l.platform;
         linksWrap.appendChild(a);
       });
@@ -198,6 +269,17 @@
       src.className = "sources";
       src.textContent = "Sources: " + sources.join(", ");
       wrap.appendChild(src);
+    }
+
+    // Add play audio button for bot messages
+    if (role === "bot" && !pending) {
+      const playBtn = document.createElement("button");
+      playBtn.className = "play-audio-btn";
+      playBtn.innerHTML = "🔊 Play";
+      playBtn.dataset.text = text;
+      playBtn.dataset.language = language;
+      playBtn.addEventListener("click", () => playAudio(text, language, playBtn));
+      wrap.appendChild(playBtn);
     }
 
     chatEl.appendChild(wrap);
@@ -217,7 +299,7 @@
     }
   }
 
-  async function sendMessage(text) {
+  async function sendMessage(text, voiceMode = false) {
     addMessage("user", text);
     const pendingEl = addMessage("bot", "…", { pending: true });
     sendBtn.disabled = true;
@@ -226,7 +308,7 @@
       const res = await fetch(`${API_BASE}/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: text, session_id: sessionId }),
+        body: JSON.stringify({ message: text, session_id: sessionId, voice_mode: voiceMode }),
       });
 
       if (!res.ok) {
@@ -243,7 +325,24 @@
         ...(data.certificate_links || []).map((c) => ({ title: c.title, url: c.url })),
         ...(data.profile_links || []).map((p) => ({ title: p.platform, url: p.url })),
       ];
-      addMessage("bot", data.answer, { links, sources: data.sources || [] });
+
+      // Detect language from answer for TTS
+      const hasArabic = /[؀-ۿ]/.test(data.answer);
+      currentLanguage = hasArabic ? "ar" : "en";
+
+      const messageEl = addMessage("bot", data.answer, { links, sources: data.sources || [], language: currentLanguage });
+
+      // Auto-play TTS if this was a voice input
+      if (voiceMode) {
+        // Find the play button in the message we just added
+        const playButton = messageEl.querySelector('.play-audio-btn');
+        if (playButton) {
+          // Trigger auto-play after a short delay
+          setTimeout(() => {
+            playButton.click();
+          }, 500);
+        }
+      }
     } catch (e) {
       pendingEl.remove();
       addMessage("bot", "Something went wrong reaching the server. Please try again.");
@@ -260,6 +359,153 @@
     inputEl.value = "";
     sendMessage(text);
   });
+
+  // Voice recording functionality
+  micBtn.addEventListener("click", async () => {
+    if (!mediaRecorder || mediaRecorder.state === "inactive") {
+      // Start recording
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        mediaRecorder = new MediaRecorder(stream);
+
+        mediaRecorder.ondataavailable = (e) => {
+          audioChunks.push(e.data);
+        };
+
+        mediaRecorder.onstop = async () => {
+          const audioBlob = new Blob(audioChunks, { type: "audio/webm" });
+          audioChunks = [];
+
+          // Stop all tracks to release microphone
+          stream.getTracks().forEach(track => track.stop());
+
+          // Send to STT
+          await transcribeAndSend(audioBlob);
+        };
+
+        mediaRecorder.start();
+        micBtn.classList.add("recording");
+        micBtn.innerHTML = "⏹️";
+        recordingStatus.style.display = "inline";
+        sendBtn.disabled = true;
+        inputEl.disabled = true;
+      } catch (err) {
+        console.error("Microphone access denied:", err);
+        alert("Microphone access is required for voice input. Please allow microphone access in your browser settings.");
+      }
+    } else {
+      // Stop recording
+      mediaRecorder.stop();
+      micBtn.classList.remove("recording");
+      micBtn.innerHTML = "🎤";
+      recordingStatus.style.display = "none";
+      sendBtn.disabled = false;
+      inputEl.disabled = false;
+    }
+  });
+
+  async function transcribeAndSend(audioBlob) {
+    const pendingEl = addMessage("bot", "Transcribing...", { pending: true });
+
+    try {
+      const formData = new FormData();
+      formData.append("audio", audioBlob, "recording.webm");
+
+      const res = await fetch(`${API_BASE}/api/stt`, {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || `STT failed: HTTP ${res.status}`);
+      }
+
+      const { text, language } = await res.json();
+
+      pendingEl.remove();
+
+      // Display transcribed text and send to chat WITH voice_mode=true
+      currentLanguage = language;
+      addMessage("user", text);
+      sendMessage(text, true);  // voiceMode=true for spoken input
+
+    } catch (err) {
+      pendingEl.remove();
+      addMessage("bot", "Could not transcribe audio. Please try again or use text input.");
+      console.error("STT error:", err);
+      sendBtn.disabled = false;
+      inputEl.disabled = false;
+    }
+  }
+
+  async function playAudio(text, language, button) {
+    // If audio is already playing, stop it
+    if (currentAudio && !currentAudio.paused) {
+      currentAudio.pause();
+      currentAudio = null;
+      button.innerHTML = "🔊 Play";
+      button.disabled = false;
+      return;
+    }
+
+    const originalText = button.innerHTML;
+    button.innerHTML = "⏳ Loading...";
+    button.disabled = true;
+
+    try {
+      const res = await fetch(`${API_BASE}/api/tts`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text, language }),
+      });
+
+      if (!res.ok) {
+        throw new Error(`TTS failed: HTTP ${res.status}`);
+      }
+
+      const audioBlob = await res.blob();
+      const audioUrl = URL.createObjectURL(audioBlob);
+
+      const audio = new Audio(audioUrl);
+      currentAudio = audio;
+
+      button.innerHTML = "⏹️ Stop";
+      button.disabled = false;
+
+      // Update button click to stop
+      const stopHandler = () => {
+        audio.pause();
+        currentAudio = null;
+        URL.revokeObjectURL(audioUrl);
+        button.innerHTML = originalText;
+      };
+      button.onclick = stopHandler;
+
+      audio.play();
+
+      audio.onended = () => {
+        URL.revokeObjectURL(audioUrl);
+        button.innerHTML = originalText;
+        button.onclick = () => playAudio(text, language, button);
+        currentAudio = null;
+      };
+
+      audio.onerror = () => {
+        URL.revokeObjectURL(audioUrl);
+        button.innerHTML = originalText;
+        button.onclick = () => playAudio(text, language, button);
+        currentAudio = null;
+        console.error("Audio playback failed");
+      };
+
+    } catch (err) {
+      console.error("TTS error:", err);
+      button.innerHTML = originalText;
+      button.disabled = false;
+      alert("Could not generate audio. Please try again.");
+    }
+  }
 
   loadHistory();
   </script>

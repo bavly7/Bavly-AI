@@ -1,9 +1,10 @@
 """
-Phase 1-3 — FastAPI Backend
+Phase 1-5 — FastAPI Backend
 
 Main application entry point. Handles:
   - Phase 1/2: Chat endpoint with LangGraph RAG orchestration
   - Phase 3: GitHub webhook receiver for knowledge base auto-updates
+  - Phase 5: Voice I/O (STT/TTS endpoints)
 
 RULES.md notes respected here:
   - #4: every answer stays traceable to sources (passed straight through
@@ -15,16 +16,19 @@ Phases implemented:
   - Phase 1: Linear RAG (retrieval + generation)
   - Phase 2: LangGraph orchestration (routing, caching, security)
   - Phase 3: GitHub webhook ingestion (diff-based re-embedding)
+  - Phase 5: Voice I/O (speech-to-text, text-to-speech)
 """
 
+import io
 import os
 import uuid
 from datetime import datetime, timezone
 from contextlib import asynccontextmanager
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, BackgroundTasks, Header, Request
+from fastapi import FastAPI, HTTPException, BackgroundTasks, Header, Request, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy import create_engine, text
 
@@ -34,6 +38,7 @@ from backend.retrieval import RetrievedChunk
 from backend.graph import run_graph
 from backend.webhook import handle_github_webhook
 from backend.ingestion import process_webhook_changes
+from backend.voice import speech_to_text, text_to_speech
 
 import traceback
 
@@ -64,6 +69,7 @@ app.add_middleware(
 class ChatRequest(BaseModel):
     message: str
     session_id: str | None = None  # if omitted, a new session is created
+    voice_mode: bool = False  # True when user spoke (not typed)
 
 
 class ChatResponse(BaseModel):
@@ -72,6 +78,16 @@ class ChatResponse(BaseModel):
     sources: list[str]
     certificate_links: list[dict]
     profile_links: list[dict]
+
+
+class STTResponse(BaseModel):
+    text: str
+    language: str
+
+
+class TTSRequest(BaseModel):
+    text: str
+    language: str  # "ar" or "en"
 
 
 # ---------------------------------------------------------------------------
@@ -144,7 +160,8 @@ async def chat_endpoint(request: ChatRequest):
 
         result = run_graph(
             session_id=active_session_id,
-            query=request.message
+            query=request.message,
+            voice_mode=request.voice_mode
         )
 
         
@@ -212,3 +229,57 @@ async def github_webhook_endpoint(
     except Exception as e:
         print("🔥 ERROR IN /webhook/github:", traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ---------------------------------------------------------------------------
+# Phase 5 — Voice I/O Endpoints
+# ---------------------------------------------------------------------------
+
+@app.post("/api/stt", response_model=STTResponse)
+async def transcribe_audio(audio: UploadFile = File(...)):
+    """
+    Transcribe audio to text using Groq Whisper-large-v3.
+
+    Accepts: multipart/form-data with 'audio' field (WebM, WAV, MP3, M4A, etc.)
+    Returns: {text, language}
+
+    Rate limit: Groq free tier ~30 req/min (same pool as LLM calls)
+    """
+    if not audio.content_type or not audio.content_type.startswith("audio/"):
+        raise HTTPException(400, "File must be audio format")
+
+    audio_data = await audio.read()
+
+    try:
+        result = await speech_to_text(audio_data, audio.filename or "audio.webm")
+        return STTResponse(**result)
+    except HTTPException:
+        raise
+    except Exception as e:
+        print("🔥 ERROR IN /api/stt:", traceback.format_exc())
+        raise HTTPException(503, f"STT service unavailable: {str(e)}")
+
+
+@app.post("/api/tts")
+async def synthesize_speech(request: TTSRequest):
+    """
+    Generate speech audio from text using Edge TTS.
+
+    Accepts: {text, language} where language is "ar" or "en"
+    Returns: audio/mpeg stream
+    """
+    if not request.text.strip():
+        raise HTTPException(400, "Text cannot be empty")
+
+    try:
+        audio_bytes = await text_to_speech(request.text, request.language)
+        return StreamingResponse(
+            io.BytesIO(audio_bytes),
+            media_type="audio/mpeg",
+            headers={"Content-Disposition": "attachment; filename=response.mp3"}
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        print("🔥 ERROR IN /api/tts:", traceback.format_exc())
+        raise HTTPException(500, f"TTS generation failed: {str(e)}")

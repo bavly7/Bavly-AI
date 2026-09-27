@@ -1,10 +1,12 @@
 alembic
 sqlalchemy
 psycopg2-binary
-python-dotenv 
+python-dotenv
 pgvector
 cohere
 groq
 fastapi
 uvicorn[standard]
 langgraph
+edge-tts>=6.1.0
+python-multipart
