@@ -64,27 +64,87 @@ def embed_query(text: str) -> list[float]:
             time.sleep(2)
 
 
-def search_knowledge_chunks(query: str, top_k: int = TOP_K) -> list[RetrievedChunk]:
-    """Vector similarity search over knowledge_chunks.
-    Uses pgvector's cosine distance operator (<=>); similarity = 1 - distance."""
+def search_knowledge_chunks(
+    query: str,
+    top_k: int = TOP_K,
+    project_names: list[str] | None = None,
+    company_names: list[str] | None = None,
+    include_personal: bool = False,
+) -> list[RetrievedChunk]:
+    """
+    Vector similarity search over knowledge_chunks with mixed metadata pre-filtering.
+
+    Phase 5.1 Mixed Filters: Supports multiple projects, companies, and personal in ONE query.
+    Uses OR conditions to combine filters, allowing queries like:
+    - "Compare KYC and PulseFit" → projects OR
+    - "Tell me about Elevvo and FlyRank" → companies OR
+    - "Your skills and work at Elevvo" → personal OR company
+    - "Compare KYC project vs Elevvo experience" → project OR company
+
+    Args:
+        query: User's question text
+        top_k: Number of results to return
+        project_names: List of projects to filter by (e.g., ["kyc", "pulsefit"])
+        company_names: List of companies to filter by (e.g., ["elevvo", "flyrank"])
+        include_personal: Whether to include personal_bio chunks (for mixed queries)
+
+    Returns:
+        List of RetrievedChunk objects sorted by similarity
+
+    Uses pgvector's cosine distance operator (<=>); similarity = 1 - distance.
+    """
     query_embedding = embed_query(query)
 
-    sql = text("""
+    # Build OR conditions for mixed filtering
+    or_conditions = []
+    params = {"query_embedding": str(query_embedding), "top_k": top_k}
+
+    # Add project filters (supports multiple projects)
+    if project_names:
+        if len(project_names) == 1:
+            or_conditions.append("project_name = :project_0")
+            params["project_0"] = project_names[0].lower()
+        else:
+            # Multiple projects: "project_name IN ('kyc', 'pulsefit')"
+            placeholders = ", ".join([f":project_{i}" for i in range(len(project_names))])
+            or_conditions.append(f"project_name IN ({placeholders})")
+            for i, project in enumerate(project_names):
+                params[f"project_{i}"] = project.lower()
+
+    # Add company filters (supports multiple companies)
+    if company_names:
+        if len(company_names) == 1:
+            or_conditions.append("company_name = :company_0")
+            params["company_0"] = company_names[0].lower()
+        else:
+            # Multiple companies: "company_name IN ('elevvo', 'flyrank')"
+            placeholders = ", ".join([f":company_{i}" for i in range(len(company_names))])
+            or_conditions.append(f"company_name IN ({placeholders})")
+            for i, company in enumerate(company_names):
+                params[f"company_{i}"] = company.lower()
+
+    # Add personal filter if requested
+    if include_personal:
+        or_conditions.append("source_type = 'personal_bio'")
+
+    # Construct WHERE clause with OR logic
+    # If no filters specified, search all chunks (fallback)
+    where_clause = " OR ".join(or_conditions) if or_conditions else "TRUE"
+
+    sql = text(f"""
         SELECT
             content,
             source_type,
             project_id,
             1 - (embedding <=> :query_embedding) AS similarity
         FROM knowledge_chunks
+        WHERE {where_clause}
         ORDER BY embedding <=> :query_embedding
         LIMIT :top_k
     """)
 
     with engine.connect() as conn:
-        rows = conn.execute(
-            sql,
-            {"query_embedding": str(query_embedding), "top_k": top_k},
-        ).fetchall()
+        rows = conn.execute(sql, params).fetchall()
 
     return [
         RetrievedChunk(

@@ -46,6 +46,7 @@ PROFILE_LINKS = [
     {"platform": "LinkedIn", "url": "https://www.linkedin.com/in/bavly-waleed"},
     {"platform": "Kaggle", "url": "https://www.kaggle.com/bavlywaleed"},
     {"platform": "GitHub", "url": "https://github.com/bavly7"},
+    {"platform": "Portfolio", "url": "https://bavly7.github.io/bavlywaleed.github.io/"},
     {"platform": "Email", "url": "mailto:bavly.waleed777@gmail.com"},
     {"platform": "Phone", "url": "tel:+201200020385"},
 ]
@@ -70,12 +71,13 @@ class GraphState(TypedDict, total=False):
     history: list[dict]
     voice_mode: bool  # True when user spoke (not typed)
 
-    # Router output
+    # Router output (Phase 5.1: Multi-entity support)
     intents: list[str]
     cert_domain: str | None
-    project_name: str | None
+    projects: list[str] | None      # Changed from project_name (string) to projects (list)
     companies: list[str] | None
     tech_filter: list[str] | None
+    include_personal: bool          # Whether to include personal_bio in mixed queries
 
     # Cache
     cache_hit: bool
@@ -203,7 +205,7 @@ def write_cache(state: GraphState) -> dict:
 # Router
 # ---------------------------------------------------------------------------
 
-# FIX #3: Cleaner examples to avoid model confusion
+# Phase 5.1: Multi-entity mixed filtering support
 ROUTER_SYSTEM_PROMPT = """You are an intent router for an AI portfolio assistant \
 (Bavly). Given a user message (Egyptian Arabic, English, mixed, with possible \
 typos/colloquialisms), extract ALL intents and entities present.
@@ -212,27 +214,56 @@ Return ONLY a JSON object matching this schema, nothing else:
 {
   "intents": ["rag_content" | "certifications" | "links"],
   "cert_domain": string or null,
-  "project_name": string or null,
+  "projects": [string] or null,
   "companies": [string] or null,
   "tech_filter": [string] or null,
+  "include_personal": boolean,
   "language": "ar" | "en"
 }
 
 Intent definitions:
 - "rag_content": asking about background, experience, a project's details, skills, personal/general questions about the owner.
 - "certifications": asking about certificates, courses, training, credentials.
-- "links": asking for contact info, social/profile links (LinkedIn, GitHub, Kaggle), phone, email.
+- "links": asking for contact info, social/profile links (LinkedIn, GitHub, Kaggle, Portfolio, website), phone, email.
+  * Triggers: "contact", "links", "profile", "LinkedIn", "GitHub", "email", "phone", "portfolio", "website", "site"
+  * Arabic triggers: "تواصل", "لينكات", "حسابات", "إيميل", "تليفون", "بورتفليو", "موقع", "صفحة"
+
+Entity extraction rules:
+- "projects": Extract ALL project names mentioned (e.g., ["KYC", "PulseFit"])
+  * CRITICAL: "project at [COMPANY]" or "مشروع في [COMPANY]" means work AT that company, NOT a project name
+  * Example: "project at DEPI" → companies = ["DEPI"], projects = null (NOT projects = ["DEPI"])
+  * Example: "بروجكت في NTI" → companies = ["NTI"], projects = null
+- "companies": Extract ALL company names mentioned (e.g., ["Elevvo", "FlyRank", "NTI", "DEPI"])
+  * Look for patterns: "at [COMPANY]", "في [COMPANY]", "في تدريب [COMPANY]", "work at", "experience at", "internship at", "training at"
+- "include_personal": Set to true ONLY for direct personal questions (skills, background, bio, "who are you", "introduce yourself")
+  * Set to FALSE for work/experience questions like "What did you do at [COMPANY]?" or "Tell me about your work experience"
+  * Set to FALSE when asking about roles, responsibilities, or achievements at a company or project
+  * Set to TRUE only when explicitly asking about personal skills, background, or self-introduction
+- "tech_filter": Extract technologies mentioned (e.g., ["YOLO", "Python"])
 
 IMPORTANT:
-- A single message can have multiple intents AND multiple entities.
-- If the user asks about experience at multiple companies, extract ALL in "companies".
-- If the user asks "what projects used X?", extract X in "tech_filter".
-- cert_domain should be a single string like "computer vision" or "machine learning", not a list.
+- A single message can reference multiple projects, companies, AND personal info simultaneously.
+- Extract ALL entities present, even in comparison questions.
+- Be CONSERVATIVE with "include_personal" — only set to true for explicit personal/bio questions.
+- Project names should match folder names: "KYC", "PulseFit", "Agentic RAG", etc.
+- Normalize company names: "Elevvo", "FlyRank", "NTI", "DEPI"
 
 Examples:
-- "What certifications in computer vision?" → {"intents": ["certifications"], "cert_domain": "computer vision"}
-- "What projects used YOLO?" → {"intents": ["rag_content"], "tech_filter": ["YOLO"]}
-- "Experience at Google and FlyRank?" → {"intents": ["rag_content"], "companies": ["Google", "FlyRank"]}"""
+- "Compare KYC and PulseFit projects" → {"intents": ["rag_content"], "projects": ["KYC", "PulseFit"], "include_personal": false}
+- "Tell me about Elevvo and FlyRank work" → {"intents": ["rag_content"], "companies": ["Elevvo", "FlyRank"], "include_personal": false}
+- "What did Bavly do at NTI?" → {"intents": ["rag_content"], "companies": ["NTI"], "include_personal": false}
+- "بافلي عمل بروجكت في DEPI ولا لا" → {"intents": ["rag_content"], "companies": ["DEPI"], "include_personal": false, "language": "ar"}
+- "مشروع في تدريب NTI" → {"intents": ["rag_content"], "companies": ["NTI"], "include_personal": false, "language": "ar"}
+- "Tell me about your work experience" → {"intents": ["rag_content"], "include_personal": false}
+- "What are your skills?" → {"intents": ["rag_content"], "include_personal": true}
+- "What are your skills and work at Elevvo?" → {"intents": ["rag_content"], "companies": ["Elevvo"], "include_personal": true}
+- "Compare KYC project vs Elevvo experience" → {"intents": ["rag_content"], "projects": ["KYC"], "companies": ["Elevvo"], "include_personal": false}
+- "Who are you?" → {"intents": ["rag_content"], "include_personal": true}
+- "Show me your portfolio" → {"intents": ["links"], "include_personal": false}
+- "عايز البورتفليو بتاع بافلي" → {"intents": ["links"], "include_personal": false, "language": "ar"}
+- "How can I contact you?" → {"intents": ["links"], "include_personal": false}
+- "What certifications in computer vision?" → {"intents": ["certifications"], "cert_domain": "computer vision", "include_personal": false}
+- "What projects used YOLO?" → {"intents": ["rag_content"], "tech_filter": ["YOLO"], "include_personal": false}"""
 
 
 def route_intents(state: GraphState) -> dict:
@@ -253,9 +284,10 @@ def route_intents(state: GraphState) -> dict:
         parsed = {
             "intents": ["rag_content"],
             "cert_domain": None,
-            "project_name": None,
+            "projects": None,
             "companies": None,
             "tech_filter": None,
+            "include_personal": False,
             "language": "en"
         }
 
@@ -266,9 +298,10 @@ def route_intents(state: GraphState) -> dict:
     return {
         "intents": intents,
         "cert_domain": parsed.get("cert_domain"),
-        "project_name": parsed.get("project_name"),
+        "projects": parsed.get("projects"),  # Now a list
         "companies": parsed.get("companies"),
         "tech_filter": parsed.get("tech_filter"),
+        "include_personal": parsed.get("include_personal", False),
         "language": parsed.get("language", "en"),
     }
 
@@ -286,40 +319,72 @@ def dispatch_intents(state: GraphState) -> list[str]:
 # Sub-nodes
 # ---------------------------------------------------------------------------
 
-# FIX #2: In-memory boosting instead of extra API calls
+# Phase 5.1: Mixed multi-entity metadata filtering
 def rag_content_node(state: GraphState) -> dict:
+    """
+    RAG retrieval with mixed metadata pre-filtering.
+
+    Supports multiple entities in a single query using OR logic:
+    - Multiple projects: "Compare KYC and PulseFit"
+    - Multiple companies: "Tell me about Elevvo and FlyRank"
+    - Mixed filters: "Your skills and work at Elevvo"
+    - Cross-entity: "Compare KYC project vs Elevvo experience"
+
+    Each entity searches within its own scope (project_name, company_name, or personal_bio)
+    rather than searching all chunks.
+    """
     query = state["query"]
+    projects = state.get("projects") or []
     companies = state.get("companies") or []
+    include_personal = state.get("include_personal", False)
     tech_filter = state.get("tech_filter") or []
 
-    # Pass 1: Normal semantic search
-    chunks = search_knowledge_chunks(query)
+    # Normalize entity names to lowercase for consistency
+    normalized_projects = [p.lower() for p in projects] if projects else []
+    normalized_companies = [c.lower() for c in companies] if companies else []
 
-    # Pass 2: Company-specific search (only if companies mentioned)
-    if companies:
-        for company in companies:
-            company_chunks = search_knowledge_chunks(f"experience {company}")
-            chunks.extend(company_chunks)
+    # Determine if we have specific entities or need broad fallback
+    has_specific_entities = bool(normalized_projects or normalized_companies or include_personal)
 
-    # In-Memory Boosting for exact keywords (Companies & Tech) without extra API calls
+    if has_specific_entities:
+        # Mixed filtering: search across specified entities only
+        chunks = search_knowledge_chunks(
+            query,
+            project_names=normalized_projects if normalized_projects else None,
+            company_names=normalized_companies if normalized_companies else None,
+            include_personal=include_personal
+        )
+    else:
+        # No specific entities: broad search with source_type fallback
+        # Detect intent from query keywords
+        query_lower = query.lower()
+
+        # Check for personal/background questions
+        personal_keywords = ["skill", "background", "about you", "who are you", "introduce", "bio"]
+        if any(kw in query_lower for kw in personal_keywords):
+            chunks = search_knowledge_chunks(query, include_personal=True)
+        # Check for work/experience questions
+        elif any(kw in query_lower for kw in ["work", "experience", "job", "company", "role", "career"]):
+            # Broad experience search: get all experience chunks
+            # We'll search without specific filters, but boost experience chunks in scoring
+            chunks = search_knowledge_chunks(query)
+        else:
+            # Completely ambiguous: search all chunks
+            chunks = search_knowledge_chunks(query)
+
+    # In-Memory Boosting for tech keywords (Hybrid Search)
+    # This provides lexical boosting on top of semantic search without extra API calls
+    # Note: We don't boost companies because they're already filtered at database level
+    # (all returned chunks already match the company filter, so boosting has no effect)
     for c in chunks:
         content_lower = c.content.lower()
-        for company in companies:
-            if company.lower() in content_lower:
-                c.similarity = min(1.0, c.similarity + 0.15)
+        # Boost for tech mentions (useful since tech is not database-filtered)
         for tech in tech_filter:
             if tech.lower() in content_lower:
                 c.similarity = min(1.0, c.similarity + 0.10)
 
-    # Deduplicate and re-sort
-    seen = set()
-    unique_chunks = []
-    for c in chunks:
-        if c.content not in seen:
-            seen.add(c.content)
-            unique_chunks.append(c)
-
-    chunks = sorted(unique_chunks, key=lambda x: x.similarity, reverse=True)[:5]
+    # Sort by similarity and take top K
+    chunks = sorted(chunks, key=lambda x: x.similarity, reverse=True)[:5]
     confident = bool(chunks) and chunks[0].similarity >= CONFIDENCE_THRESHOLD
 
     return {
@@ -405,7 +470,7 @@ def generate_answer(state: GraphState) -> dict:
     cert_text = ""
     if state.get("certificate_links"):
         cert_text = "\nCERTIFICATIONS FOUND IN DATABASE:\n" + "\n".join(
-            f"- {c['title']} by {c['issuer']}" for c in state["certificate_links"]
+            f"- {c['title']} by {c['issuer']} — URL: {c['url']}" for c in state["certificate_links"]
         )
 
     profile_text = ""
@@ -451,7 +516,8 @@ def generate_answer(state: GraphState) -> dict:
         "- Only state facts that are in CONTEXT, CERTIFICATIONS, or PROFILES.\n"
         "- If something isn't in your data, say so briefly — don't over-explain.\n"
         "- Never invent projects, roles, or experiences not in the context.\n"
-        "- Do not include raw URLs in your text — links are handled separately.\n"
+        "- For certificate/profile links: When user asks to SEE or VIEW a certificate, include the URL directly.\n"
+        "  Example: 'Here is the DEPI certificate: [URL]' or 'تقدر تشوفها هنا: [URL]'\n"
         "- Keep answers focused and concise — don't dump your entire resume unless asked.\n\n"
 
         "CLOSING:\n"

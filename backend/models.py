@@ -62,6 +62,11 @@ class KnowledgeChunk(Base):
     language = Column(Text, default="auto")
     file_path = Column(Text)       # e.g., "projects/kyc-onboarding/architecture.md"
     chunk_index = Column(Integer)  # 0, 1, 2, ... position within file after splitting
+
+    # Phase 5.1: Metadata columns for pre-filtering
+    project_name = Column(Text)    # e.g., "kyc" - extracted from file path for projects
+    company_name = Column(Text)    # e.g., "elevvo" - extracted from file path for experience
+
     created_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
     updated_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
 

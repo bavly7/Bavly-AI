@@ -95,22 +95,32 @@ def folder_name_to_title(folder_name: str) -> str:
 # Project ID resolution
 # ---------------------------------------------------------------------------
 
-def resolve_project_id(file_path: str, session) -> tuple[str, int | None]:
+def resolve_project_id(file_path: str, session) -> tuple[str, str | None, str | None, str | None]:
     """
     Given a normalized file_path like "projects/kyc-onboarding/architecture.md",
     determine:
       1. source_type (personal_bio | experience | project_narrative | github_readme)
       2. project_id (UUID if applicable, else None)
+      3. project_name (extracted from path for metadata filtering, e.g., "kyc")
+      4. company_name (extracted from path for experience, e.g., "elevvo")
 
-    Returns: (source_type, project_id)
+    Returns: (source_type, project_id, project_name, company_name)
+
+    Phase 5.1 Metadata Extraction Rules:
+    - projects/kyc-onboarding/* → project_name="kyc", company_name=None
+    - experience/elevvo/* → project_name=None, company_name="elevvo"
+    - personal/* → project_name=None, company_name=None
     """
     parts = file_path.split("/")
 
     if parts[0] == "personal":
-        return "personal_bio", None
+        return "personal_bio", None, None, None
 
-    if parts[0] == "experience":
-        return "experience", None
+    if parts[0] == "experience" and len(parts) >= 2:
+        company_folder = parts[1]  # e.g., "elevvo", "flyrank", "nti"
+        # Extract company name (lowercase, normalized)
+        company_name = company_folder.lower().strip()
+        return "experience", None, None, company_name
 
     if parts[0] == "projects" and len(parts) >= 3:
         folder_name = parts[1]  # e.g., "kyc-onboarding"
@@ -149,10 +159,15 @@ def resolve_project_id(file_path: str, session) -> tuple[str, int | None]:
 
         # Determine source_type
         source_type = "github_readme" if file_name == "github_metadata.md" else "project_narrative"
-        return source_type, project_id
+
+        # Extract project_name for metadata filtering (first part of folder name before hyphen)
+        # e.g., "kyc-onboarding" → "kyc", "pulsefit" → "pulsefit"
+        project_name_meta = folder_name.split("-")[0].lower()
+
+        return source_type, project_id, project_name_meta, None
 
     # Fallback
-    return "project_narrative", None
+    return "project_narrative", None, None, None
 
 
 # ---------------------------------------------------------------------------
@@ -189,8 +204,8 @@ def process_file_change(
         print(f"  - skipping placeholder-only file: {file_path}")
         return
 
-    # Resolve source_type and project_id
-    source_type, project_id = resolve_project_id(file_path, session)
+    # Resolve source_type, project_id, and metadata (Phase 5.1)
+    source_type, project_id, project_name, company_name = resolve_project_id(file_path, session)
 
     # Check if chunk already exists
     existing = session.query(KnowledgeChunk).filter_by(file_path=file_path, chunk_index=0).first()
@@ -211,7 +226,7 @@ def process_file_change(
     language = detect_language(content)
     vector = embed(content)
 
-    # Insert new chunk
+    # Insert new chunk with metadata (Phase 5.1)
     chunk = KnowledgeChunk(
         source_type=source_type,
         project_id=project_id,
@@ -220,6 +235,8 @@ def process_file_change(
         language=language,
         file_path=file_path,
         chunk_index=0,  # one chunk per file for now
+        project_name=project_name,  # Phase 5.1: metadata for pre-filtering
+        company_name=company_name,  # Phase 5.1: metadata for pre-filtering
     )
     session.add(chunk)
     session.flush()  # get the new chunk ID
