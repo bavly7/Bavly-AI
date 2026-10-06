@@ -1,21 +1,23 @@
 """
-Phase 1 — Retrieval
+Phase 1 — Retrieval (Refactored for Phase 5.1 Multi-Entity Support)
 
 Given a user question, this module:
   1. Embeds the query (Cohere, input_type='search_query')
   2. Runs cosine-similarity search against knowledge_chunks (pgvector)
-  3. Optionally does structured lookups against certifications / projects
-     when the question is clearly about those (simple keyword routing for
-     now — real intent classification comes when we port to LangGraph in
-     Phase 2)
+     with optional single-entity metadata pre-filtering
+  3. Supports tech filters via content ILIKE search
+  4. Optionally does structured lookups against certifications
 
-Returns a list of retrieved chunks with their similarity scores, so the
-generation step can decide whether confidence is high enough to answer.
+Key Changes in Phase 5.1:
+- search_knowledge_chunks now accepts single-entity filters
+- Tech filters use OR-based content matching
+- Designed to be called in parallel for multi-entity queries
 """
 
 import os
 import time
 from dataclasses import dataclass
+from typing import List, Optional
 
 import cohere
 from dotenv import load_dotenv
@@ -34,7 +36,7 @@ engine = create_engine(DATABASE_URL)
 # embeddings; this threshold is a starting point, not calibrated against
 # a labeled eval set yet — same honest caveat as the KYC project's
 # thresholds. Revisit once we've tested against real questions.
-CONFIDENCE_THRESHOLD = 0.35
+CONFIDENCE_THRESHOLD = 0.25
 
 TOP_K = 5
 
@@ -45,6 +47,9 @@ class RetrievedChunk:
     source_type: str
     project_id: str | None
     similarity: float
+    # Additional metadata for debugging
+    project_name: str | None = None
+    company_name: str | None = None
 
 
 def embed_query(text: str) -> list[float]:
@@ -66,85 +71,94 @@ def embed_query(text: str) -> list[float]:
 
 def search_knowledge_chunks(
     query: str,
-    top_k: int = TOP_K,
-    project_names: list[str] | None = None,
-    company_names: list[str] | None = None,
-    include_personal: bool = False,
+    limit: int = TOP_K,
+    company_name: Optional[str] = None,
+    project_name: Optional[str] = None,
+    source_type: Optional[str] = None,
+    tech_filters: Optional[List[str]] = None,
 ) -> list[RetrievedChunk]:
     """
-    Vector similarity search over knowledge_chunks with mixed metadata pre-filtering.
+    Vector similarity search over knowledge_chunks with single-entity metadata pre-filtering.
 
-    Phase 5.1 Mixed Filters: Supports multiple projects, companies, and personal in ONE query.
-    Uses OR conditions to combine filters, allowing queries like:
-    - "Compare KYC and PulseFit" → projects OR
-    - "Tell me about Elevvo and FlyRank" → companies OR
-    - "Your skills and work at Elevvo" → personal OR company
-    - "Compare KYC project vs Elevvo experience" → project OR company
+    Phase 5.1: Designed to be called in parallel for multi-entity queries.
+    Each call filters by ONE entity (one company OR one project OR one source_type).
 
     Args:
         query: User's question text
-        top_k: Number of results to return
-        project_names: List of projects to filter by (e.g., ["kyc", "pulsefit"])
-        company_names: List of companies to filter by (e.g., ["elevvo", "flyrank"])
-        include_personal: Whether to include personal_bio chunks (for mixed queries)
+        limit: Number of results to return (use 2-3 for multi-entity parallel calls)
+        company_name: Single company to filter by (e.g., "elevvo")
+        project_name: Single project to filter by (e.g., "kyc")
+        source_type: Single source type to filter by (e.g., "personal_bio")
+        tech_filters: List of technologies to search for in content (OR logic)
 
     Returns:
         List of RetrievedChunk objects sorted by similarity
 
     Uses pgvector's cosine distance operator (<=>); similarity = 1 - distance.
+
+    Example Usage:
+        # Single entity search
+        chunks = search_knowledge_chunks("Tell me about the project", project_name="kyc", limit=3)
+
+        # Multi-entity search (call in parallel)
+        kyc_chunks = search_knowledge_chunks(query, project_name="kyc", limit=2)
+        pulsefit_chunks = search_knowledge_chunks(query, project_name="pulsefit", limit=2)
+        all_chunks = kyc_chunks + pulsefit_chunks
     """
     query_embedding = embed_query(query)
 
-    # Build OR conditions for mixed filtering
-    or_conditions = []
-    params = {"query_embedding": str(query_embedding), "top_k": top_k}
+    # Build WHERE clause conditions
+    where_conditions = []
+    params = {"query_embedding": str(query_embedding), "limit": limit}
 
-    # Add project filters (supports multiple projects)
-    if project_names:
-        if len(project_names) == 1:
-            or_conditions.append("project_name = :project_0")
-            params["project_0"] = project_names[0].lower()
-        else:
-            # Multiple projects: "project_name IN ('kyc', 'pulsefit')"
-            placeholders = ", ".join([f":project_{i}" for i in range(len(project_names))])
-            or_conditions.append(f"project_name IN ({placeholders})")
-            for i, project in enumerate(project_names):
-                params[f"project_{i}"] = project.lower()
+    # Single-entity filters (mutually exclusive by design)
+    if company_name:
+        where_conditions.append("LOWER(company_name) = LOWER(:company_name)")
+        params["company_name"] = company_name
 
-    # Add company filters (supports multiple companies)
-    if company_names:
-        if len(company_names) == 1:
-            or_conditions.append("company_name = :company_0")
-            params["company_0"] = company_names[0].lower()
-        else:
-            # Multiple companies: "company_name IN ('elevvo', 'flyrank')"
-            placeholders = ", ".join([f":company_{i}" for i in range(len(company_names))])
-            or_conditions.append(f"company_name IN ({placeholders})")
-            for i, company in enumerate(company_names):
-                params[f"company_{i}"] = company.lower()
+    if project_name:
+        where_conditions.append("LOWER(project_name) = LOWER(:project_name)")
+        params["project_name"] = project_name
 
-    # Add personal filter if requested
-    if include_personal:
-        or_conditions.append("source_type = 'personal_bio'")
+    if source_type:
+        where_conditions.append("source_type = :source_type")
+        params["source_type"] = source_type
 
-    # Construct WHERE clause with OR logic
-    # If no filters specified, search all chunks (fallback)
-    where_clause = " OR ".join(or_conditions) if or_conditions else "TRUE"
+    # Tech filters: OR-based content search
+    # Example: (content ILIKE '%yolo%' OR content ILIKE '%langraph%')
+    if tech_filters and len(tech_filters) > 0:
+        tech_conditions = []
+        for idx, tech in enumerate(tech_filters):
+            tech_param = f"tech_{idx}"
+            tech_conditions.append(f"content ILIKE :{tech_param}")
+            params[tech_param] = f"%{tech}%"
+        where_conditions.append(f"({' OR '.join(tech_conditions)})")
+
+    # Combine all conditions with AND
+    where_clause = " AND ".join(where_conditions) if where_conditions else "TRUE"
 
     sql = text(f"""
         SELECT
             content,
             source_type,
             project_id,
+            project_name,
+            company_name,
             1 - (embedding <=> :query_embedding) AS similarity
         FROM knowledge_chunks
         WHERE {where_clause}
         ORDER BY embedding <=> :query_embedding
-        LIMIT :top_k
+        LIMIT :limit
     """)
 
-    with engine.connect() as conn:
-        rows = conn.execute(sql, params).fetchall()
+    try:
+        with engine.connect() as conn:
+            rows = conn.execute(sql, params).fetchall()
+    except Exception as e:
+        print(f"⚠️ SQL Error in search_knowledge_chunks: {e}")
+        print(f"   Query: {query[:100]}...")
+        print(f"   Filters: company={company_name}, project={project_name}, source={source_type}, tech={tech_filters}")
+        return []
 
     return [
         RetrievedChunk(
@@ -152,6 +166,8 @@ def search_knowledge_chunks(
             source_type=row.source_type,
             project_id=str(row.project_id) if row.project_id else None,
             similarity=row.similarity,
+            project_name=row.project_name,
+            company_name=row.company_name,
         )
         for row in rows
     ]
@@ -197,26 +213,96 @@ def extract_cert_field_filter(query: str) -> str | None:
     return None
 
 
+def find_projects_by_tech(
+    technologies: list[str],
+    limit: int = 3
+) -> list[tuple[str, str, list[str]]]:
+    """
+    Find projects that use ANY of the given technologies.
+
+    Args:
+        technologies: List of tech keywords (e.g., ["OCR", "ByteTrack"])
+        limit: Maximum number of projects to return (default 3)
+
+    Returns:
+        List of (folder_name, display_name, tech_stack) tuples,
+        ranked by number of matching technologies
+
+    Example:
+        >>> find_projects_by_tech(["YOLO", "Computer Vision"], limit=3)
+        [
+            ("agentic-rag-retail", "Agentic RAG Retail", ["YOLO", "Qdrant", ...]),
+            ("pulsefit", "PulseFit", ["YOLO", "ByteTrack", ...])
+        ]
+    """
+    if not technologies:
+        return []
+
+    with engine.connect() as conn:
+        # Build ILIKE patterns for each technology
+        tech_conditions = []
+        params = {"limit": limit}
+
+        for idx, tech in enumerate(technologies):
+            param_name = f"tech_{idx}"
+            # Check if ANY element in tech_stack array matches this technology
+            tech_conditions.append(
+                f"EXISTS (SELECT 1 FROM unnest(tech_stack) t WHERE t ILIKE :{param_name})"
+            )
+            params[param_name] = f"%{tech}%"
+
+        where_clause = " OR ".join(tech_conditions) if tech_conditions else "FALSE"
+
+        # Build match count expression
+        match_expressions = [f"t ILIKE :{f'tech_{i}'}" for i in range(len(technologies))]
+        match_count_expr = " OR ".join(match_expressions) if match_expressions else "FALSE"
+
+        sql = text(f"""
+            SELECT
+                folder_name,
+                name AS display_name,
+                tech_stack,
+                -- Count how many technologies match (for relevance ranking)
+                (
+                    SELECT COUNT(DISTINCT t)
+                    FROM unnest(tech_stack) t
+                    WHERE {match_count_expr}
+                ) AS match_count
+            FROM projects
+            WHERE {where_clause}
+            ORDER BY match_count DESC, name ASC
+            LIMIT :limit
+        """)
+
+        try:
+            rows = conn.execute(sql, params).fetchall()
+            return [
+                (row.folder_name, row.display_name, row.tech_stack or [])
+                for row in rows
+            ]
+        except Exception as e:
+            print(f"⚠️ Error in find_projects_by_tech: {e}")
+            return []
+
+
 def get_certifications(field_filter=None):
     with engine.connect() as conn:
         if field_filter:
-    
             query = text("""
-                SELECT title, issuer, file_url FROM certifications 
-                WHERE LOWER(title) LIKE LOWER(:flt) 
+                SELECT title, issuer, file_url FROM certifications
+                WHERE LOWER(title) LIKE LOWER(:flt)
                    OR LOWER(issuer) LIKE LOWER(:flt)
             """)
             rows = conn.execute(query, {"flt": f"%{field_filter}%"}).fetchall()
         else:
-        
             query = text("SELECT title, issuer, file_url FROM certifications")
             rows = conn.execute(query).fetchall()
-            
+
     return [{"title": r.title, "issuer": r.issuer, "file_url": r.file_url} for r in rows]
 
 
 def retrieve(query: str) -> dict:
-    """Main retrieval entrypoint used by the generation step.
+    """Main retrieval entrypoint used by the generation step (legacy Phase 1 interface).
 
     Returns a dict with:
       - chunks: list of RetrievedChunk, sorted by similarity desc
@@ -245,7 +331,7 @@ def retrieve(query: str) -> dict:
 
 if __name__ == "__main__":
     # Quick manual test — run directly: python retrieval.py
-    test_query = "what achivemnet bavly had at DEPI training?"
+    test_query = "what achievement bavly had at DEPI training?"
     result = retrieve(test_query)
     print(f"Query: {test_query}")
     print(f"Confident: {result['confident']}")

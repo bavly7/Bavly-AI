@@ -143,9 +143,18 @@ async def handle_github_webhook(
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Invalid JSON payload: {e}")
 
+    # Log webhook event type
+    event_type = payload.get("zen")  # Ping events have "zen" field
+    if event_type:
+        print(f"🔔 Received GitHub ping event (webhook test)")
+        return {"status": "ignored", "reason": "Ping event (not a push)"}
+
     # Only process pushes to main branch
     ref = payload.get("ref", "")
+    print(f"🔔 Received webhook: ref={ref}")
+
     if ref not in ("refs/heads/main", "refs/heads/master"):
+        print(f"⚠️ Ignoring: not main/master branch")
         return {
             "status": "ignored",
             "reason": f"Not a push to main/master (ref={ref})"
@@ -153,8 +162,10 @@ async def handle_github_webhook(
 
     # Extract changed files
     file_changes = extract_file_changes(payload)
+    print(f"📝 Found {len(file_changes)} file change(s) in knowledge/")
 
     if not file_changes:
+        print(f"⚠️ Ignoring: no .md files in knowledge/ folder")
         return {
             "status": "ignored",
             "reason": "No .md files changed in knowledge/ folder"

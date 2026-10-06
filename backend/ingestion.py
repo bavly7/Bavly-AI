@@ -48,12 +48,18 @@ Session = sessionmaker(bind=engine)
 def embed(text: str) -> list[float]:
     """Generate a single embedding via Cohere multilingual v3.0.
     input_type='search_document' is used for stored content."""
-    resp = co.embed(
-        texts=[text],
-        model="embed-multilingual-v3.0",
-        input_type="search_document",
-    )
-    return resp.embeddings[0]
+    try:
+        print(f"  ⏳ Generating embedding ({len(text)} chars)...")
+        resp = co.embed(
+            texts=[text],
+            model="embed-multilingual-v3.0",
+            input_type="search_document",
+        )
+        print(f"  ✅ Embedding generated")
+        return resp.embeddings[0]
+    except Exception as e:
+        print(f"  ❌ Embedding failed: {e}")
+        raise
 
 
 def detect_language(text: str) -> str:
@@ -160,9 +166,10 @@ def resolve_project_id(file_path: str, session) -> tuple[str, str | None, str | 
         # Determine source_type
         source_type = "github_readme" if file_name == "github_metadata.md" else "project_narrative"
 
-        # Extract project_name for metadata filtering (first part of folder name before hyphen)
-        # e.g., "kyc-onboarding" → "kyc", "pulsefit" → "pulsefit"
-        project_name_meta = folder_name.split("-")[0].lower()
+        # Extract project_name for metadata filtering (full folder name)
+        # FIXED: Use full folder name instead of truncating at first hyphen
+        # e.g., "kyc-onboarding" → "kyc-onboarding", "skin-cancer-gan-augmentation" → "skin-cancer-gan-augmentation"
+        project_name_meta = folder_name.lower()
 
         return source_type, project_id, project_name_meta, None
 
@@ -207,6 +214,27 @@ def process_file_change(
     # Resolve source_type, project_id, and metadata (Phase 5.1)
     source_type, project_id, project_name, company_name = resolve_project_id(file_path, session)
 
+    # NEW: Check for tech_stack.md file and populate projects.tech_stack
+    if source_type in ("project_narrative", "github_readme") and project_id:
+        tech_stack_file_path = file_path.rsplit("/", 1)[0] + "/tech_stack.md"
+        tech_stack_path = KNOWLEDGE_ROOT / tech_stack_file_path
+
+        if tech_stack_path.exists():
+            tech_stack_content = tech_stack_path.read_text(encoding="utf-8").strip()
+            # Remove markdown header if present (e.g., "# Project Name — Tech Stack")
+            lines = [line.strip() for line in tech_stack_content.split("\n") if line.strip()]
+            tech_line = lines[-1] if lines else ""  # Get last non-empty line (the actual tech list)
+
+            if tech_line and not tech_line.startswith("#"):
+                tech_stack = [t.strip() for t in tech_line.split(",") if t.strip()]
+
+                # Update project's tech_stack
+                session.execute(
+                    text("UPDATE projects SET tech_stack = :tech WHERE id = :id"),
+                    {"tech": tech_stack, "id": project_id}
+                )
+                print(f"  ✅ Updated tech_stack for project {project_id}: {len(tech_stack)} technologies")
+
     # Check if chunk already exists
     existing = session.query(KnowledgeChunk).filter_by(file_path=file_path, chunk_index=0).first()
 
@@ -218,6 +246,7 @@ def process_file_change(
 
         # Content changed: delete old, will re-insert below
         session.delete(existing)
+        session.flush()  # Commit the deletion before inserting new chunk
         print(f"  ~ updating chunk: {file_path}")
     else:
         print(f"  + adding chunk: {file_path}")
