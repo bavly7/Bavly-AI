@@ -44,3 +44,4 @@ cross-functional teams across his internships and projects.
 LangChain, LangGraph, AI agent automation, and RAG (Retrieval-Augmented
 Generation) architectures — an area he is actively growing stronger in and
 increasingly focused on."" 
+"" 
