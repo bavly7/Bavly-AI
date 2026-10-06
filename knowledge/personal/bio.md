@@ -29,4 +29,4 @@ to train a model, improve accuracy, and solve problems in a pipeline, to
 asking a bigger question: what could he actually build with it to help
 people. To him, AI is like a 3D printer for software — there is no real
 limit to the real-world problems you can invent a solution for, once you
-understand the mechanics.
+understand the mechanics."# Updated at 2026-10-06" 
