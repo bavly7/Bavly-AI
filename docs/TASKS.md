@@ -202,8 +202,8 @@ optimizations documented in TOKEN_OPTIMIZATION.md (can reach 194+ messages/day).
 - Voice is pure I/O layer — LangGraph pipeline unchanged
 
 ### Phase 6 — Character/animation
-- [ ] Tone-tagging node
-- [ ] Frontend character + animation state mapping
+- [x] Tone-tagging node
+- [x] Frontend character + animation state mapping
 
 ### Phase 7 — Polish
 - [ ] Monitoring/logging
