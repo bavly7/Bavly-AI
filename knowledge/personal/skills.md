@@ -43,4 +43,4 @@ cross-functional teams across his internships and projects.
 ## Strongest Areas and also Actively Deepening
 LangChain, LangGraph, AI agent automation, and RAG (Retrieval-Augmented
 Generation) architectures — an area he is actively growing stronger in and
-increasingly focused on.
+increasingly focused on."" 
